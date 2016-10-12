@@ -35,6 +35,7 @@ rec {
       matplotlib
       lasagne
       theano
+      lzma
     ];
   };
 }
