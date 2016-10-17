@@ -137,7 +137,19 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     if encode:
         default_mask = np.zeros(longest_block).astype('float32')
         for data_block in data_blocks:
-            data_block['mask'] = default_mask[:len(data_block['data'])] = np.ones(len(data_block['data'])).astype('float32')
+            data = data_block['data']
+            data_block['mask'] = default_mask[:len(data)] = np.ones(len(data)).astype('float32')
+            diff_from_longest = longest_block - len(data)
+            padding = np.zeros(diff_from_longest, dtype=data.dtype)
+            padded_data = np.concatenate([data, padding])
+            data_block['data'] = padded_data
+
+            label = data_block['label']
+            padded_label = np.concatenate([label, padding])
+            data_block['label'] = padded_label
+
+    global g_longest_block
+    g_longest_block = longest_block
 
     if index_less > 0:
         print("WARN: index less than html seen %d times"%index_less)
@@ -179,9 +191,42 @@ def encoding_statistics(encodings, take=5):
     if seenZero:
         print("Saw character with value 0")
 
-def get_batch(n):
+def get_batch(num_blocks):
+    global data_blocks_encoded
+    global g_longest_block
+    global i_train_end
+    global i_train_current
+
+    take = i_train_current + num_blocks
+
+    block_size = min(num_blocks, i_train_end - i_train_current)
+
+    # Check whether we can init with zeros
+    X = np.zeros(shape=(block_size, g_longest_block))
+    y = np.zeros(shape=(block_size, g_longest_block))
+    Xmask = np.zeros(shape=(block_size, g_longest_block))
+
+    print(X.shape)
+
+    idx = 0
+    while i_train_current < i_train_end and i_train_current < take:
+        example = data_blocks_encoded[i_train_current]
+        X[idx] = example['data']
+        y[idx] = example['label']
+        Xmask[idx] = example['mask']
+        i_train_current += 1
+        idx += 1
+
+    return X, y, Xmask
+
+def reset_batches():
+    global i_train_current
+    i_train_current = 0
 
 
-data_filtered = load_training_data()
+g_longest_block = 0
+i_train_current = 0
+i_train_end = 8
+data_filtered = load_training_data(10)
 data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
-encoding_statistics(encodings)
+# encoding_statistics(encodings)

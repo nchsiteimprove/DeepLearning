@@ -1,5 +1,4 @@
-%matplotlib inline
-%matplotlib nbagg
+
 import lasagne
 import theano
 import theano.tensor as T
@@ -7,11 +6,7 @@ import matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output
-
-
-# Load data
-data_filtered = load_training_data(5)
-data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
+from training_data import get_batch, reset_batches, encodings
 
 # Variables
 BATCH_SIZE = 2
@@ -19,8 +14,9 @@ NUM_OUTPUTS = 2
 VOCABULARY = len(encodings)
 NUM_UNITS = 10
 # Symbolic Theano variables
-x_sym = T.imatrix()
+x_sym = T.fmatrix()
 y_sym = T.fmatrix()
+xmask_sym = T.matrix()
 
 # Define network layers
 # Embedding layers
@@ -31,7 +27,13 @@ l_emb = EmbeddingLayer(l_in, VOCABULARY, VOCABULARY, W=np.eye(VOCABULARY, dtype=
 l_emb.params[l_emb.W].remove('trainable')
 
 # Use dummy data to verify the shape of the embedding layer
+X, y, Xmask = get_batch(2)
 
+print(X.shape)
+# allow_input_downcast risks loss of data
+result = get_output(l_emb, inputs={l_in:x_sym}).eval({x_sym:X})
+rshape = result.shape
+print(rshape)
 
 # Encoder layers
 
