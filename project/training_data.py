@@ -84,7 +84,8 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     index_beyond = 0
     index_less = 0
 
-    code_max = 255
+    global max_encoding
+    code_max = max_encoding - 1
 
     if encode:
         print("Encoding training data...")
@@ -126,27 +127,26 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
                     elif b_label == 0:
                         label = [0.0, 1.0]
 
-                    data_blocks.append({'data': np.array(codes), 'label': np.array(label)})
+                    data_blocks.append({'data': np.array(codes).astype('int32'), 'label': np.array(label)})
                 else:
                     data_blocks.append({'label': b_label, 'data':b_html})
 
-                if statistics:
+                if encode:
+                    longest_block = max(longest_block, len(codes))
+                    shortest_block = min(shortest_block, len(codes))
+                elif statistics:
                     longest_block = max(longest_block, len(b_html))
                     shortest_block = min(shortest_block, len(b_html))
 
     if encode:
-        default_mask = np.zeros(longest_block).astype('float32')
         for data_block in data_blocks:
             data = data_block['data']
-            data_block['mask'] = default_mask[:len(data)] = np.ones(len(data)).astype('float32')
             diff_from_longest = longest_block - len(data)
             padding = np.zeros(diff_from_longest, dtype=data.dtype)
             padded_data = np.concatenate([data, padding])
             data_block['data'] = padded_data
-
-            label = data_block['label']
-            padded_label = np.concatenate([label, padding])
-            data_block['label'] = padded_label
+            padded_mask = np.concatenate([np.ones(len(data)).astype('int32'), padding.astype('int32')])
+            data_block['mask'] = padded_mask
 
     global g_longest_block
     g_longest_block = longest_block
@@ -199,14 +199,12 @@ def get_batch(num_blocks):
 
     take = i_train_current + num_blocks
 
-    block_size = min(num_blocks, i_train_end - i_train_current)
+    batch_size = min(num_blocks, i_train_end - i_train_current)
 
     # Check whether we can init with zeros
-    X = np.zeros(shape=(block_size, g_longest_block))
-    y = np.zeros(shape=(block_size, g_longest_block))
-    Xmask = np.zeros(shape=(block_size, g_longest_block))
-
-    print(X.shape)
+    X = np.zeros(shape=(batch_size, g_longest_block)).astype('int32')
+    y = np.zeros(shape=(batch_size, 2)).astype('int32')
+    Xmask = np.zeros(shape=(batch_size, g_longest_block)).astype('int32')
 
     idx = 0
     while i_train_current < i_train_end and i_train_current < take:
@@ -223,7 +221,7 @@ def reset_batches():
     global i_train_current
     i_train_current = 0
 
-
+max_encoding = 255 + 1
 g_longest_block = 0
 i_train_current = 0
 i_train_end = 8
