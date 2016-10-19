@@ -66,7 +66,7 @@ total_cost = T.nnet.categorical_crossentropy(reshaped, flattened)
 mean_cost = T.mean(total_cost)
 
 # Accuracy function
-argmax = T.argmax(output_train, axis=0)
+argmax = T.argmax(output_train, axis=-1)
 eq = T.eq(argmax, y_sym)
 acc = T.mean(eq)
 

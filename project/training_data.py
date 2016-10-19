@@ -225,6 +225,6 @@ max_encoding = 255 + 1
 g_longest_block = 0
 i_train_current = 0
 i_train_end = 8
-data_filtered = load_training_data(10)
+data_filtered = load_training_data(9)
 data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
 # encoding_statistics(encodings)
