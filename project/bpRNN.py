@@ -103,16 +103,28 @@ print("Training...")
 val_samples = []
 costs, accs = [], []
 plt.figure()
+verbose = True
+c = 1
 try:
     while samples_processed < samples_to_process:
+        if verbose:
+            print("Batch %d"%c)
+            c += 1
+            print("\tGetting batch")
         x_, ys_, x_masks_ = \
             get_batch(BATCH_SIZE)
+        if verbose:
+            print("\tTraining batch")
         batch_cost, batch_acc, batch_output = train_func(x_, ys_, x_masks_)
         costs += [batch_cost]
         samples_processed += BATCH_SIZE
         #validation data
+        if verbose:
+            print("\tPossible validation")
         if samples_processed % val_interval == 0:
             #print "validating"
+            if verbose:
+                print("\tTesting network")
             val_acc, val_output = test_func(Xval, Yval, Xmask_val)
             val_samples += [samples_processed]
             accs += [val_acc]
