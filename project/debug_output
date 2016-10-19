@@ -1,0 +1,88 @@
+THEANO_FLAGS=mode=DebugMode python bpRNN.py
+Loaded 9 training examples
+Encoding training data...
+Longest block length: 14028
+Shortest block length: 15
+749
+Vocabulary size: 256
+X: (3, 14028)
+(3, 14028, 256)
+^[[C^[[D(3, 14028, 10)
+(3, 10)
+(3, 2)
+(3, 2)
+Trainable Model Parameters
+----------------------------------------
+W_in_to_updategate (256, 10)
+W_hid_to_updategate (10, 10)
+b_updategate (10,)
+W_in_to_resetgate (256, 10)
+W_hid_to_resetgate (10, 10)
+b_resetgate (10,)
+W_in_to_hidden_update (256, 10)
+W_hid_to_hidden_update (10, 10)
+b_hidden_update (10,)
+W (10, 2)
+b (2,)
+W (2, 2)
+b (2,)
+----------------------------------------
+Training...
+Batch 1
+	Getting batch
+	Training batch
+Traceback (most recent call last):
+  File "bpRNN.py", line 118, in <module>
+    batch_cost, batch_acc, batch_output, batch_argmax, batch_eq = train_func(x_, ys_, x_masks_)
+  File "/home/nch/anaconda2/lib/python2.7/site-packages/theano/compile/function_module.py", line 866, in __call__
+    self.fn() if output_subset is None else\
+  File "/home/nch/anaconda2/lib/python2.7/site-packages/theano/compile/debugmode.py", line 2305, in deco
+    return f()
+  File "/home/nch/anaconda2/lib/python2.7/site-packages/theano/compile/debugmode.py", line 2045, in f
+    specific_hint=hint2)
+InvalidValueError: InvalidValueError
+        type(variable) = TensorType(float64, vector)
+        variable       = CrossentropyCategorical1Hot.0
+        type(value)    = <type 'numpy.ndarray'>
+        dtype(value)   = float64
+        shape(value)   = (3,)
+        value          = [ inf  inf  inf]
+        min(value)     = inf
+        max(value)     = inf
+        isfinite       = False
+        client_node    = None
+        hint           = perform output
+        specific_hint  = non-finite elements not allowed
+        context        = ...
+  CrossentropyCategorical1Hot [id A] ''
+   |Reshape{2} [id B] ''
+   | |Elemwise{Composite{(i0 * (i1 + Abs(i1)))}} [id C] ''
+   | | |TensorConstant{(1, 1) of 0.5} [id D]
+   | | |Elemwise{Add}[(0, 0)] [id E] ''
+   | |   |Dot22 [id F] ''
+   | |   | |SoftmaxWithBias [id G] ''
+   | |   | | |Dot22 [id H] ''
+   | |   | | | |Subtensor{::, int64} [id I] ''
+   | |   | | | | |InplaceDimShuffle{1,0,2} [id J] ''
+   | |   | | | | | |Subtensor{int64:int64:int16} [id K] ''
+   | |   | | | | |   |forall_inplace,cpu,scan_fn} [id L] ''
+   | |   | | | | |   | |Elemwise{minimum,no_inplace} [id M] ''
+   | |   | | | | |   | |Subtensor{int64:int64:int16} [id N] ''
+   | |   | | | | |   | |Subtensor{int64:int64:int16} [id O] ''
+   | |   | | | | |   | |IncSubtensor{InplaceSet;:int64:} [id P] ''
+   | |   | | | | |   | |Join [id Q] ''
+   | |   | | | | |   |ScalarFromTensor [id R] ''
+   | |   | | | | |   | |Elemwise{Composite{(((Switch(LT(i0, i1), i2, i1) - i3) - i4) + i5)}} [id S] ''
+   | |   | | | | |   |ScalarFromTensor [id T] ''
+   | |   | | | | |   | |Elemwise{Composite{(((i0 - i1) - i2) + i3)}}[(0, 0)] [id U] ''
+   | |   | | | | |   |Constant{1} [id V]
+   | |   | | | | |Constant{-1} [id W]
+   | |   | | | |W [id X]
+   | |   | | |b [id Y]
+   | |   | |W [id Z]
+   | |   |InplaceDimShuffle{x,0} [id BA] ''
+   | |     |b [id BB]
+   | |TensorConstant{[-1  2]} [id BC]
+   |Reshape{1} [id BD] ''
+     |<TensorType(int32, matrix)> [id BE]
+     |TensorConstant{(1,) of -1} [id BF]

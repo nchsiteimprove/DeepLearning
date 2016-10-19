@@ -11,7 +11,7 @@ from training_data import get_batch, reset_batches, encodings, max_encoding
 
 # Variables
 NUM_OUTPUTS = 2
-VOCABULARY = max_encoding#len(encodings)
+VOCABULARY = max_encoding + 1#len(encodings)
 NUM_UNITS = 10
 # Symbolic Theano variables
 x_sym = T.imatrix()
@@ -44,7 +44,7 @@ print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym
 
 # l_reshape = lasagne.layers.ReshapeLayer(l_slice, (-1, [2]))
 # print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
-
+### TODO: Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes
 l_softmax = DenseLayer(incoming=l_slice, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
 print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
@@ -56,17 +56,18 @@ print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X
 
 # Define evaluation functions
 output_train = get_output(l_out, inputs={l_in: x_sym, l_mask_enc:xmask_sym}, deterministic=False)
+output_test = get_output(l_out, inputs={l_in: x_sym, l_mask_enc:xmask_sym}, deterministic=True)
 
 # Cost function
-reshaped = T.reshape(output_train, (-1, NUM_OUTPUTS))
+# reshaped = T.reshape(output_train, (-1, NUM_OUTPUTS))
 flattened = y_sym.flatten()
 # print("Reshaped: %s"%str(reshaped.shape))
 # print("Flattened: %s"%str(flattened.shape))
-total_cost = T.nnet.categorical_crossentropy(reshaped, flattened)
+total_cost = T.nnet.categorical_crossentropy(output_train, flattened)
 mean_cost = T.mean(total_cost)
 
 # Accuracy function
-argmax = T.argmax(output_train, axis=-1)
+argmax = T.argmax(output_train, axis=-1, keepdims=True)
 eq = T.eq(argmax, y_sym)
 acc = T.mean(eq)
 
@@ -83,20 +84,20 @@ all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
 updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.005)
 
-train_func = theano.function([x_sym, y_sym, xmask_sym], [mean_cost, acc, output_train], updates=updates)
+train_func = theano.function([x_sym, y_sym, xmask_sym], [mean_cost, acc, output_train, argmax, eq, total_cost], updates=updates)
 
-test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_train])
+test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test])
 
 reset_batches()
 # Generate validation data
-Xval, Yval, Xmask_val = get_batch(3)
-print "Xval", Xval.shape
-print "Yval", Yval.shape
+Xval, Yval, Xmask_val = get_batch(100)
+# print "Xval", Xval.shape
+# print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 3
-val_interval = 2
-samples_to_process = 7
+BATCH_SIZE = 20
+val_interval = 50
+samples_to_process = 650
 samples_processed = 0
 
 print("Training...")
@@ -113,19 +114,36 @@ try:
             print("\tGetting batch")
         x_, ys_, x_masks_ = \
             get_batch(BATCH_SIZE)
+        if x_ is None:
+            break
         if verbose:
             print("\tTraining batch")
-        batch_cost, batch_acc, batch_output = train_func(x_, ys_, x_masks_)
+        batch_cost, batch_acc, batch_output, batch_argmax, batch_eq, batch_total_cost = train_func(x_, ys_, x_masks_)
+        print("Output:")
+        print(batch_output)
+        print("Labels:")
+        print(ys_)
+        print("Cost:")
+        print(batch_total_cost)
+        # print("Output shape:")
+        # print(batch_output.shape)
+        # print("Argmax shape:")
+        # print(batch_argmax.shape)
+        # print("Eq shape:")
+        # print(batch_eq.shape)
         costs += [batch_cost]
         samples_processed += BATCH_SIZE
         #validation data
-        if verbose:
-            print("\tPossible validation")
+        # if verbose:
+        #     print("\tPossible validation")
         if samples_processed % val_interval == 0:
             #print "validating"
             if verbose:
                 print("\tTesting network")
             val_acc, val_output = test_func(Xval, Yval, Xmask_val)
+            # print(val_output)
+            if verbose:
+                print("\tAccuracy: %.2f%%"%val_acc)
             val_samples += [samples_processed]
             accs += [val_acc]
             plt.plot(val_samples,accs)

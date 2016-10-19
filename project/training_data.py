@@ -84,6 +84,7 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     index_beyond = 0
     index_less = 0
 
+    global verbose
     global max_encoding
     code_max = max_encoding - 1
 
@@ -123,10 +124,12 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
                         else:
                             encodings[code] += 1
                     if b_label == 1:
-                        label = [1.0, 0.0]
+                        label = [1.0]#, 0.0]
                     elif b_label == 0:
-                        label = [0.0, 1.0]
-
+                        label = [0.0]#, 1.0]
+                    ### Debug
+                    if len(codes) > 20000:
+                        continue
                     data_blocks.append({'data': np.array(codes).astype('int32'), 'label': np.array(label)})
                 else:
                     data_blocks.append({'label': b_label, 'data':b_html})
@@ -159,6 +162,10 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
         print("Longest block length: %d"%longest_block)
         print("Shortest block length: %d"%shortest_block)
 
+    global i_train_end
+    i_train_end = len(data_blocks)
+    if verbose:
+        print("Generated %d training examples"%i_train_end)
     return data_blocks, encodings
 
 def encoding_statistics(encodings, take=5):
@@ -196,15 +203,20 @@ def get_batch(num_blocks):
     global g_longest_block
     global i_train_end
     global i_train_current
+    global verbose
 
     take = i_train_current + num_blocks
 
     batch_size = min(num_blocks, i_train_end - i_train_current)
 
-    # Check whether we can init with zeros
-    X = np.zeros(shape=(batch_size, g_longest_block)).astype('int32')
-    y = np.zeros(shape=(batch_size, 2)).astype('int32')
-    Xmask = np.zeros(shape=(batch_size, g_longest_block)).astype('int32')
+    try:
+        X = np.zeros(shape=(batch_size, g_longest_block)).astype('int32')
+        y = np.zeros(shape=(batch_size, 1)).astype('int32')
+        Xmask = np.zeros(shape=(batch_size, g_longest_block)).astype('int32')
+    except:
+        if verbose:
+            traceback.print_exc
+        return None, None, None
 
     idx = 0
     while i_train_current < i_train_end and i_train_current < take:
@@ -221,10 +233,11 @@ def reset_batches():
     global i_train_current
     i_train_current = 0
 
+verbose = True
 max_encoding = 255 + 1
 g_longest_block = 0
 i_train_current = 0
-i_train_end = 8
-data_filtered = load_training_data(9)
+i_train_end = 50
+data_filtered = load_training_data(90)
 data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
 # encoding_statistics(encodings)
