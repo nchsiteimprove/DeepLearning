@@ -10,10 +10,32 @@ from lasagne.nonlinearities import linear
 from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer
 from training_data import get_batch, reset_batches, encodings, max_encoding
 
+class RepeatLayer(lasagne.layers.Layer):
+    def __init__(self, incoming, n, **kwargs):
+        '''
+        The input is expected to be a 2D tensor of shape
+        (num_batch, num_features). The input is repeated
+        n times such that the output will be
+        (num_batch, n, num_features)
+        '''
+        super(RepeatLayer, self).__init__(incoming, **kwargs)
+        self.n = n
+
+    def get_output_shape_for(self, input_shape):
+        return tuple([input_shape[0], self.n] + list(input_shape[1:]))
+
+    def get_output_for(self, input, **kwargs):
+        #repeat the input n times
+        tensors = [input]*self.n
+        stacked = theano.tensor.stack(*tensors)
+        dim = [1, 0] + range(2, input.ndim + 1)
+        return stacked.dimshuffle(dim)
+
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
 NUM_UNITS = 10
+MAX_OUT_LABELS = 1
 # Symbolic Theano variables
 x_sym = T.imatrix()
 y_sym = T.imatrix()
@@ -35,7 +57,7 @@ print("X: %s"%str(X.shape))
 # allow_input_downcast risks loss of data
 print(get_output(l_emb, inputs={l_in:x_sym}).eval({x_sym:X}).shape)
 
-# Encoder layers
+###### Start of Encoder ######
 l_mask_enc = InputLayer(shape=(None, None))
 l_gru_enc = GRULayer(incoming=l_emb, num_units=NUM_UNITS, mask_input=l_mask_enc)
 print(get_output(l_gru_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
@@ -43,32 +65,40 @@ print(get_output(l_gru_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_s
 l_slice = SliceLayer(l_gru_enc, indices=-1, axis=1)
 print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-# l_reshape = lasagne.layers.ReshapeLayer(l_slice, (-1, [2]))
-# print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+###### End of Encoder ######
+
+###### Start of Decoder ######
+l_in_rep = RepeatLayer(l_slice, n=MAX_OUT_LABELS)
+print("Repeat layer")
+print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
+    {x_sym: X, xmask_sym: Xmask}).shape
+
+l_reshape = lasagne.layers.ReshapeLayer(l_in_rep, (-1, [2]))
+print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+
 ### TODO: Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes
-l_out = DenseLayer(incoming=l_slice, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
+l_softmax = DenseLayer(incoming=l_reshape, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
+print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+
+l_out = lasagne.layers.ReshapeLayer(l_softmax, (x_sym.shape[0], -1, NUM_OUTPUTS))
 print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-# l_out = lasagne.layers.ReshapeLayer(l_softmax, (x_sym.shape[0], -1, NUM_OUTPUTS))
-# print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
-
-# l_out = DenseLayer(incoming=l_softmax, num_units=NUM_OUTPUTS, nonlinearity=linear)
-# print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+###### End of Decoder ######
 
 # Define evaluation functions
 output_train = get_output(l_out, inputs={l_in: x_sym, l_mask_enc:xmask_sym}, deterministic=False)
 output_test = get_output(l_out, inputs={l_in: x_sym, l_mask_enc:xmask_sym}, deterministic=True)
 
 # Cost function
-# reshaped = T.reshape(output_train, (-1, NUM_OUTPUTS))
+reshaped = T.reshape(output_train, (-1, NUM_OUTPUTS))
 flattened = y_sym.flatten()
 # print("Reshaped: %s"%str(reshaped.shape))
 # print("Flattened: %s"%str(flattened.shape))
-total_cost = T.nnet.categorical_crossentropy(output_train, flattened)
+total_cost = T.nnet.categorical_crossentropy(reshaped, flattened)
 mean_cost = T.mean(total_cost)
 
 # Accuracy function
-argmax = T.argmax(output_train, axis=-1, keepdims=True)
+argmax = T.argmax(output_train, axis=-1)#, keepdims=True)
 eq = T.eq(argmax, y_sym)
 acc = T.mean(eq)
 
@@ -91,14 +121,14 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test])
 
 reset_batches()
 # Generate validation data
-Xval, Yval, Xmask_val = get_batch(1000)
+Xval, Yval, Xmask_val = get_batch(5)#1000)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 200
+BATCH_SIZE = 2#200
 val_interval = BATCH_SIZE*10
-samples_to_process = 200000
+samples_to_process = 20#200000
 samples_processed = 0
 last_valid_samples = 0
 

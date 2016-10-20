@@ -267,6 +267,6 @@ g_max_block_length = 1000
 g_chop_blocks = True
 i_train_current = 0
 i_train_end = 50
-data_filtered = load_training_data()
+data_filtered = load_training_data(9)
 data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
 # encoding_statistics(encodings)
