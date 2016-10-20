@@ -1,4 +1,5 @@
 import json
+import math
 import numpy as np
 import os
 import traceback
@@ -84,6 +85,13 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     index_beyond = 0
     index_less = 0
 
+    total_block_length_orig = 0
+    nr_blocks_orig = 0
+    total_block_length_chop = 0
+    nr_blocks_chop = 0
+
+    global g_chop_blocks
+    global g_max_block_length
     global verbose
     global max_encoding
     code_max = max_encoding - 1
@@ -127,19 +135,34 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
                         label = [1.0]#, 0.0]
                     elif b_label == 0:
                         label = [0.0]#, 1.0]
-                    ### Debug
-                    if len(codes) > 20000:
-                        continue
-                    data_blocks.append({'data': np.array(codes).astype('int32'), 'label': np.array(label)})
-                else:
-                    data_blocks.append({'label': b_label, 'data':b_html})
 
-                if encode:
-                    longest_block = max(longest_block, len(codes))
-                    shortest_block = min(shortest_block, len(codes))
-                elif statistics:
+                    total_block_length_orig += len(codes)
+                    nr_blocks_orig += 1
+
+                    # Some blocks are very long, split them up
+                    if g_chop_blocks and len(codes) > g_max_block_length:
+                        nr_slices = math.ceil(len(codes) / float(g_max_block_length))
+                        slice_size = len(codes) / int(nr_slices)
+
+                        if slice_size > g_max_block_length:
+                            print("ARRG!!")
+
+                        slices = [codes[i:i + slice_size] for i in xrange(0, len(codes), slice_size)]
+
+                        for s in slices:
+                            total_block_length_chop += len(s)
+                            nr_blocks_chop += 1
+                            longest_block = max(longest_block, len(s))
+                            shortest_block = min(shortest_block, len(s))
+                            data_blocks.append({'data': np.array(s).astype('int32'), 'label': np.array(label)})
+                    else: # All blocks retain their size
+                        longest_block = max(longest_block, len(codes))
+                        shortest_block = min(shortest_block, len(codes))
+                        data_blocks.append({'data': np.array(codes).astype('int32'), 'label': np.array(label)})
+                else:
                     longest_block = max(longest_block, len(b_html))
                     shortest_block = min(shortest_block, len(b_html))
+                    data_blocks.append({'label': b_label, 'data':b_html})
 
     if encode:
         for data_block in data_blocks:
@@ -166,6 +189,10 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     i_train_end = len(data_blocks)
     if verbose:
         print("Generated %d training examples"%i_train_end)
+        print("Average original block length: %d"%(total_block_length_orig/nr_blocks_orig))
+        if g_chop_blocks:
+            print("Chopped blocks to max length: %d"%g_max_block_length)
+            print("Average chopped block length: %d"%(total_block_length_chop/nr_blocks_chop))
     return data_blocks, encodings
 
 def encoding_statistics(encodings, take=5):
@@ -236,8 +263,10 @@ def reset_batches():
 verbose = True
 max_encoding = 255 + 1
 g_longest_block = 0
+g_max_block_length = 1000
+g_chop_blocks = True
 i_train_current = 0
 i_train_end = 50
-data_filtered = load_training_data(90)
+data_filtered = load_training_data()
 data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
 # encoding_statistics(encodings)

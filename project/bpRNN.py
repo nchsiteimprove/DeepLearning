@@ -6,6 +6,7 @@ import matplotlib
 # from IPython import display
 import numpy as np
 import matplotlib.pyplot as plt
+from lasagne.nonlinearities import linear
 from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer
 from training_data import get_batch, reset_batches, encodings, max_encoding
 
@@ -45,14 +46,14 @@ print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym
 # l_reshape = lasagne.layers.ReshapeLayer(l_slice, (-1, [2]))
 # print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 ### TODO: Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes
-l_softmax = DenseLayer(incoming=l_slice, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
-print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+l_out = DenseLayer(incoming=l_slice, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
+print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 # l_out = lasagne.layers.ReshapeLayer(l_softmax, (x_sym.shape[0], -1, NUM_OUTPUTS))
 # print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_out = DenseLayer(incoming=l_softmax, num_units=NUM_OUTPUTS)
-print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# l_out = DenseLayer(incoming=l_softmax, num_units=NUM_OUTPUTS, nonlinearity=linear)
+# print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 # Define evaluation functions
 output_train = get_output(l_out, inputs={l_in: x_sym, l_mask_enc:xmask_sym}, deterministic=False)
@@ -90,21 +91,23 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test])
 
 reset_batches()
 # Generate validation data
-Xval, Yval, Xmask_val = get_batch(100)
+Xval, Yval, Xmask_val = get_batch(1000)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 20
-val_interval = 50
-samples_to_process = 650
+BATCH_SIZE = 200
+val_interval = BATCH_SIZE*10
+samples_to_process = 200000
 samples_processed = 0
+last_valid_samples = 0
 
 print("Training...")
 val_samples = []
 costs, accs = [], []
 plt.figure()
 verbose = True
+debug = False
 c = 1
 try:
     while samples_processed < samples_to_process:
@@ -119,27 +122,29 @@ try:
         if verbose:
             print("\tTraining batch")
         batch_cost, batch_acc, batch_output, batch_argmax, batch_eq, batch_total_cost = train_func(x_, ys_, x_masks_)
-        print("Output:")
-        print(batch_output)
-        print("Labels:")
-        print(ys_)
-        print("Cost:")
-        print(batch_total_cost)
-        # print("Output shape:")
-        # print(batch_output.shape)
-        # print("Argmax shape:")
-        # print(batch_argmax.shape)
-        # print("Eq shape:")
-        # print(batch_eq.shape)
+        if debug:
+            print("Output:")
+            print(batch_output)
+            print("Labels:")
+            print(ys_)
+            print("Cost:")
+            print(batch_total_cost)
+            # print("Output shape:")
+            # print(batch_output.shape)
+            # print("Argmax shape:")
+            # print(batch_argmax.shape)
+            # print("Eq shape:")
+            # print(batch_eq.shape)
         costs += [batch_cost]
         samples_processed += BATCH_SIZE
         #validation data
         # if verbose:
         #     print("\tPossible validation")
-        if samples_processed % val_interval == 0:
+        if samples_processed - last_valid_samples > val_interval:
+            last_valid_samples = samples_processed
             #print "validating"
             if verbose:
-                print("\tTesting network")
+                print("\tValidating network")
             val_acc, val_output = test_func(Xval, Yval, Xmask_val)
             # print(val_output)
             if verbose:
@@ -158,3 +163,7 @@ except KeyboardInterrupt:
     pass
 except:
     traceback.print_exc()
+
+print("Training done, final result")
+val_acc, val_output = test_func(Xval, Yval, Xmask_val)
+print("\tAccuracy: %.2f%%"%val_acc)
