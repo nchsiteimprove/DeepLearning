@@ -34,7 +34,8 @@ class RepeatLayer(lasagne.layers.Layer):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS = 10
+NUM_UNITS_ENC = 10
+NUM_UNITS_DEC = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
 x_sym = T.imatrix()
@@ -60,10 +61,10 @@ print(get_output(l_emb, inputs={l_in:x_sym}).eval({x_sym:X}).shape)
 ###### Start of Encoder ######
 l_mask_enc = InputLayer(shape=(None, None))
 
-l_gru_enc_frwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS, mask_input=l_mask_enc)
+l_gru_enc_frwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc)
 print(get_output(l_gru_enc_frwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_gru_enc_bckwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS, mask_input=l_mask_enc, backwards=True)
+l_gru_enc_bckwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc, backwards=True)
 print(get_output(l_gru_enc_bckwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 l_gru_enc = ConcatLayer([l_gru_enc_frwrd, l_gru_enc_bckwrd], axis=-1)
@@ -80,7 +81,10 @@ print("Repeat layer")
 print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
     {x_sym: X, xmask_sym: Xmask}).shape
 
-l_reshape = lasagne.layers.ReshapeLayer(l_in_rep, (-1, [2]))
+l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
+print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+
+l_reshape = lasagne.layers.ReshapeLayer(l_gru_dec, (-1, [2]))
 print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ### TODO: Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes
@@ -144,7 +148,7 @@ val_samples = []
 costs, accs = [], []
 plt.figure()
 verbose = True
-debug = False
+debug = True
 c = 1
 try:
     while samples_processed < samples_to_process:
