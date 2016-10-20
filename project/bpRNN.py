@@ -7,7 +7,7 @@ import matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 from lasagne.nonlinearities import linear
-from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer
+from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer
 from training_data import get_batch, reset_batches, encodings, max_encoding
 
 class RepeatLayer(lasagne.layers.Layer):
@@ -59,7 +59,14 @@ print(get_output(l_emb, inputs={l_in:x_sym}).eval({x_sym:X}).shape)
 
 ###### Start of Encoder ######
 l_mask_enc = InputLayer(shape=(None, None))
-l_gru_enc = GRULayer(incoming=l_emb, num_units=NUM_UNITS, mask_input=l_mask_enc)
+
+l_gru_enc_frwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS, mask_input=l_mask_enc)
+print(get_output(l_gru_enc_frwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+
+l_gru_enc_bckwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS, mask_input=l_mask_enc, backwards=True)
+print(get_output(l_gru_enc_bckwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+
+l_gru_enc = ConcatLayer([l_gru_enc_frwrd, l_gru_enc_bckwrd], axis=-1)
 print(get_output(l_gru_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 l_slice = SliceLayer(l_gru_enc, indices=-1, axis=1)
