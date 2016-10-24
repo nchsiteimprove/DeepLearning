@@ -34,7 +34,7 @@ class RepeatLayer(lasagne.layers.Layer):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 10
+NUM_UNITS_ENC = 30
 NUM_UNITS_DEC = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
@@ -132,15 +132,17 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test])
 
 reset_batches()
 # Generate validation data
-Xval, Yval, Xmask_val = get_batch(5)#1000)
-Xtest, Ytest, Xmask_test = get_batch(5)#1000)
+Xval, Yval, Xmask_val = get_batch(200)
+Xtest, Ytest, Xmask_test = get_batch(200)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 2#200
+BATCH_SIZE = 1
 val_interval = BATCH_SIZE*10
-samples_to_process = 20#200000
+samples_to_process = 200000
+
+
 samples_processed = 0
 last_valid_samples = 0
 
@@ -149,13 +151,13 @@ val_samples = []
 costs, accs = [], []
 plt.figure()
 verbose = True
-debug = True
-c = 1
+debug = False
+batch_count = 1
 try:
     while samples_processed < samples_to_process:
         if verbose:
-            print("Batch %d"%c)
-            c += 1
+            print("Batch %d"%batch_count)
+            batch_count += 1
             print("\tGetting batch")
         x_, ys_, x_masks_ = \
             get_batch(BATCH_SIZE)
@@ -190,7 +192,7 @@ try:
             val_acc, val_output = test_func(Xval, Yval, Xmask_val)
             # print(val_output)
             if verbose:
-                print("\tAccuracy: %.2f%%"%val_acc*100)
+                print("\tAccuracy: %.2f%%"%(val_acc*100))
             val_samples += [samples_processed]
             accs += [val_acc]
             plt.plot(val_samples,accs)
@@ -207,15 +209,17 @@ except:
     traceback.print_exc()
 
 print("Training done, final result")
-test_acc, test_output = test_func(Xtest, Ytest, Xmask_test)
+# test_acc, test_output = test_func(Xtest, Ytest, Xmask_test)
+test_acc, test_output = test_func(Xval, Yval, Xmask_val)
 
 nr_examples = 0
 nr_correct = 0
 for y_out, y_label in zip(test_output, Ytest):
     nr_examples += 1
     guess = np.argmax(y_out)
-    print(y_out)
-    print(guess)
+    if debug:
+        print(y_out)
+        print(guess)
     if guess == y_label:
         nr_correct += 1
 
