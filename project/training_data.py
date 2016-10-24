@@ -4,6 +4,7 @@ import numpy as np
 import os
 import traceback
 import tarfile
+import random
 
 unpacked_data_path = 'mldata/TrainingDump.json'
 
@@ -21,7 +22,7 @@ def discard_example(training_example):
     bad = [1 for attr in training_example['attributes'] if attr['name'].strip() in attr_blacklist]
     return len(bad) > 0
 
-def load_training_data(n_examples=None):
+def load_training_data(n_examples=None, seed=1337):
     got_data()
 
     with open(unpacked_data_path) as f:
@@ -40,6 +41,9 @@ def load_training_data(n_examples=None):
             if n_examples is not None and c >= n_examples:
                 break
 
+    if seed is not None:
+        random.seed(seed)
+        random.shuffle(training_data)
     print("Loaded %d training examples"%len(training_data))
     return training_data
 

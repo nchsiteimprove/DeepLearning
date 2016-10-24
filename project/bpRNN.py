@@ -133,6 +133,7 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test])
 reset_batches()
 # Generate validation data
 Xval, Yval, Xmask_val = get_batch(5)#1000)
+Xtest, Ytest, Xmask_test = get_batch(5)#1000)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
@@ -189,7 +190,7 @@ try:
             val_acc, val_output = test_func(Xval, Yval, Xmask_val)
             # print(val_output)
             if verbose:
-                print("\tAccuracy: %.2f%%"%val_acc)
+                print("\tAccuracy: %.2f%%"%val_acc*100)
             val_samples += [samples_processed]
             accs += [val_acc]
             plt.plot(val_samples,accs)
@@ -206,5 +207,5 @@ except:
     traceback.print_exc()
 
 print("Training done, final result")
-val_acc, val_output = test_func(Xval, Yval, Xmask_val)
-print("\tAccuracy: %.2f%%"%val_acc)
+val_acc, val_output = test_func(Xtest, Ytest, Xmask_test)
+print("\tAccuracy: %.2f%%"%val_acc*100)
