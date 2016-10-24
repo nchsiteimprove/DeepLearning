@@ -207,5 +207,20 @@ except:
     traceback.print_exc()
 
 print("Training done, final result")
-val_acc, val_output = test_func(Xtest, Ytest, Xmask_test)
-print("\tAccuracy: %.2f%%"%val_acc*100)
+test_acc, test_output = test_func(Xtest, Ytest, Xmask_test)
+
+nr_examples = 0
+nr_correct = 0
+for y_out, y_label in zip(test_output, Ytest):
+    nr_examples += 1
+    guess = np.argmax(y_out)
+    print(y_out)
+    print(guess)
+    if guess == y_label:
+        nr_correct += 1
+
+verified_acc = nr_correct / float(nr_examples) * 100
+
+
+print("Accuracy: %.2f%%"%(test_acc*100))
+print("verified accuracy: %.2f%%"%verified_acc)
