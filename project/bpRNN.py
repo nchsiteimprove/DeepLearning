@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from lasagne.nonlinearities import linear
 from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer
-from training_data import get_batch, reset_batches, encodings, max_encoding
+from training_data import get_batch, reset_batches, encodings, max_encoding, slice_list
 
 class RepeatLayer(lasagne.layers.Layer):
     def __init__(self, incoming, n, **kwargs):
@@ -31,10 +31,39 @@ class RepeatLayer(lasagne.layers.Layer):
         dim = [1, 0] + range(2, input.ndim + 1)
         return stacked.dimshuffle(dim)
 
+def test_network(X, Y, Xmask, slice_size):
+    accs, outputs, true_poss, true_negs, false_poss, false_negs = [], [], [], [], [], []
+    X_slices = slice_list(X, slice_size)
+    Y_slices = slice_list(Y, slice_size)
+    Xmask_slices = slice_list(Xmask, slice_size)
+    for X_slice, Y_slice, Xmask_slice in zip(X_slices, Y_slices, Xmask_slices):
+        acc_slice, output_slice, true_pos_slice, true_neg_slice, false_pos_slice, false_neg_slice = test_func(X_slice, Y_slice, Xmask_slice)
+
+        print(true_pos_slice)
+        print(true_neg_slice)
+        print(false_pos_slice)
+        print(false_neg_slice)
+
+        accs += [acc_slice]
+        outputs += [output_slice]
+        true_poss += [true_pos_slice]
+        true_negs +=  [true_neg_slice]
+        false_poss += [false_pos_slice]
+        false_negs += [false_neg_slice]
+
+    acc = np.mean(accs)
+    output = np.concatenate(outputs)
+    true_pos = np.sum(true_poss)
+    true_neg = np.sum(true_negs)
+    false_pos = np.sum(false_poss)
+    false_neg = np.sum(false_negs)
+
+    return acc, output, true_pos, true_neg, false_pos, false_neg
+
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 10#30
+NUM_UNITS_ENC = 10#30 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
@@ -109,32 +138,38 @@ total_cost = T.nnet.categorical_crossentropy(reshaped, flattened)
 mean_cost = T.mean(total_cost)
 
 # Accuracy function
-argmax = T.argmax(output_train, axis=-1)#, keepdims=True)
-eq = T.eq(argmax, y_sym)
+y_pred = T.argmax(output_train, axis=-1)#, keepdims=True)
+eq = T.eq(y_pred, y_sym)
 acc = T.mean(eq)
-# argmax = T.argmax(output_train, axis=-1)#, keepdims=True)
-#
-# acc = T.mean(bla)
+
+target = 1
+
+true_pos = (T.eq(y_sym, target) * T.eq(y_pred, target)).sum()
+true_neg = (T.neq(y_sym, target) * T.neq(y_pred, target)).sum()
+false_pos = (T.neq(y_sym, target) * T.eq(y_pred, target)).sum()
+false_neg = (T.eq(y_sym, target) * T.neq(y_pred, target)).sum()
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
-print "Trainable Model Parameters"
-print "-"*40
-for param in all_parameters:
-    print param, param.get_value().shape
-print "-"*40
+# print "Trainable Model Parameters"
+# print "-"*40
+# for param in all_parameters:
+#     print param, param.get_value().shape
+# print "-"*40
 
 all_grads = [T.clip(g,-3,3) for g in T.grad(mean_cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
 updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.05)
 
-train_func = theano.function([x_sym, y_sym, xmask_sym], [mean_cost, acc, output_train, argmax, eq, total_cost], updates=updates)
+train_func = theano.function([x_sym, y_sym, xmask_sym], [mean_cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
-test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test])
+test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, true_pos, true_neg, false_pos, false_neg])
 
 reset_batches()
 # Generate validation data
+#TODO: Increase set sizes and run them as batches
+slice_size = 2
 Xval, Yval, Xmask_val = get_batch(5)#1000)
 Xtest, Ytest, Xmask_test = get_batch(5)#1000)
 # print "Xval", Xval.shape
@@ -143,7 +178,7 @@ Xtest, Ytest, Xmask_test = get_batch(5)#1000)
 # TRAINING
 BATCH_SIZE = 2#100
 val_interval = BATCH_SIZE*10
-samples_to_process = 200#000
+samples_to_process = 60#200000
 
 
 samples_processed = 0
@@ -155,7 +190,7 @@ val_samples, train_samples = [], []
 costs, accs_val, accs_train = [], [], []
 plt.figure()
 verbose = True
-debug = False
+debug = True
 batch_count = 1
 try:
     while samples_processed < samples_to_process:
@@ -174,7 +209,7 @@ try:
             break
         if debug:
             print("\tTraining batch")
-        batch_cost, batch_acc, batch_output, batch_argmax, batch_eq, batch_total_cost = train_func(x_, ys_, x_masks_)
+        batch_cost, batch_acc, batch_output, batch_y_pred, batch_eq, batch_total_cost = train_func(x_, ys_, x_masks_)
         if debug:
             print("Output:")
             print(batch_output)
@@ -185,7 +220,7 @@ try:
             # print("Output shape:")
             # print(batch_output.shape)
             # print("Argmax shape:")
-            # print(batch_argmax.shape)
+            # print(batch_y_pred.shape)
             # print("Eq shape:")
             # print(batch_eq.shape)
         costs += [batch_cost]
@@ -200,7 +235,19 @@ try:
             #print "validating"
             if verbose:
                 print("\tValidating network")
-            val_acc, val_output = test_func(Xval, Yval, Xmask_val)
+            # val_accs, val_outputs = [], []
+            # Xval_slices = slice_list(Xval, slice_size)
+            # Yval_slices = slice_list(Yval, slice_size)
+            # Xmask_val_slices = slice_list(Xmask_val, slice_size)
+            # for Xval_slice, Yval_slice, Xmask_val_slice in zip(Xval_slices, Yval_slices, Xmask_val_slices):
+            #     val_acc_slice, val_output_slice = test_func(Xval_slice, Yval_slice, Xmask_val_slice)
+            #     val_accs += [val_acc_slice]
+            #     val_outputs += [val_output_slice]
+            # val_acc = np.mean(val_accs)
+            # val_output = np.mean(val_outputs)
+
+            val_acc, val_output, true_pos, true_neg, false_pos, false_neg = test_network(Xval, Yval, Xmask_val, slice_size)
+
             # print(val_output)
             if verbose:
                 print("\tTrain Accuracy: %.2f%%"%(batch_acc*100))
@@ -263,25 +310,25 @@ plt.savefig(output_folder + "cost_train.png")
 # plt.savefig(output_folder + "acc_train.png")
 
 print("Training done, calculating final result...")
-test_acc, test_output = test_func(Xtest, Ytest, Xmask_test)
+test_acc, test_output, true_pos, true_neg, false_pos, false_neg = test_network(Xtest, Ytest, Xmask_test, slice_size)
 
-# nr_examples = 0
-# nr_correct = 0
-# guesses = []
-# for y_out, y_label in zip(test_output, Ytest):
-#     nr_examples += 1
-#     guess = np.argmax(y_out)
-#     if debug:
-#         print(y_out)
-#         print(guess)
-#     if guess == y_label:
-#         nr_correct += 1
-#         guesses.append(1)
-#     else:
-#         guesses.append(0)
-#
-# verified_acc = nr_correct / float(nr_examples) * 100.0
-# verified_acc_mean = np.mean(guesses) * 100.0
+nr_examples = 0
+nr_correct = 0
+guesses_acc = []
+for y_out, y_label in zip(test_output, Ytest):
+    nr_examples += 1
+    guess = np.argmax(y_out)
+    if debug:
+        print(y_out)
+        print(guess)
+    if guess == y_label:
+        nr_correct += 1
+        guesses_acc.append(1)
+    else:
+        guesses_acc.append(0)
+
+verified_acc = nr_correct / float(nr_examples) * 100.0
+verified_acc_mean = np.mean(guesses_acc) * 100.0
 #
 # np_max = np.argmax(test_output, axis=-1)
 # np_test = np.equal(np_max, Ytest)
@@ -292,8 +339,22 @@ test_acc, test_output = test_func(Xtest, Ytest, Xmask_test)
 #     else:
 #         np_ones_zeros.append(0)
 # verified_acc_mean_np = np.mean(np_ones_zeros) * 100.0
-
+#TODO: Confusion matrix, recall, precision etc.
 print("Accuracy: %.2f%%"%(test_acc*100))
-# print("Verified accuracy: %.2f%%"%verified_acc)
-# print("Verified accuracy mean: %.2f%%"%verified_acc_mean)
+print("Verified accuracy: %.2f%%"%verified_acc)
+print("Verified accuracy mean: %.2f%%"%verified_acc_mean)
 # print("Verified accuracy mean numpy: %.2f%%"%verified_acc_mean_np)
+
+print("True positives: %d"%true_pos)
+print("True negatives: %d"%true_neg)
+print("False positives: %d"%false_pos)
+print("False negatives: %d"%false_neg)
+print("of %d training examples"%len(test_output))
+
+recall = float(true_pos) / max(true_pos + false_neg, 1)
+precision = float(true_pos) / max(true_pos + false_pos, 1)
+f1 = 2 * (precision*recall)/max(precision+recall, 1)
+print("")
+print("Precision: %.2f%%"%(precision * 100.0))
+print("Recall: %.2f%%"%(recall * 100.0))
+print("F1: %.2f%%"%(f1 * 100.0))

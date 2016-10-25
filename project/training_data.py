@@ -22,6 +22,9 @@ def discard_example(training_example):
     bad = [1 for attr in training_example['attributes'] if attr['name'].strip() in attr_blacklist]
     return len(bad) > 0
 
+def slice_list(orig_list, slice_size):
+    return [orig_list[i:i + slice_size] for i in xrange(0, len(orig_list), slice_size)]
+
 def load_training_data(n_examples=None, seed=None):
     got_data()
 
@@ -46,7 +49,7 @@ def load_training_data(n_examples=None, seed=None):
         random.seed(seed)
         random.shuffle(training_data)
         print("Shuffled training pages using seed: %s"%str(seed))
-    print("Loaded %d training examples"%len(training_data))
+    print("Loaded %d training pages"%len(training_data))
     return training_data
 
 def print_attributes_from_data(raw_training_data=None):
@@ -158,7 +161,7 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
                         if slice_size > g_max_block_length:
                             print("ARRG!!")
 
-                        slices = [codes[i:i + slice_size] for i in xrange(0, len(codes), slice_size)]
+                        slices = slice_list(codes, slice_size)
 
                         slice_count = 0
                         for s in slices:
