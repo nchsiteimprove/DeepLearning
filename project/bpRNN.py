@@ -34,7 +34,7 @@ class RepeatLayer(lasagne.layers.Layer):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 30
+NUM_UNITS_ENC = 10#30
 NUM_UNITS_DEC = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
@@ -135,23 +135,24 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test])
 
 reset_batches()
 # Generate validation data
-Xval, Yval, Xmask_val = get_batch(1000)
-Xtest, Ytest, Xmask_test = get_batch(1000)
+Xval, Yval, Xmask_val = get_batch(5)#1000)
+Xtest, Ytest, Xmask_test = get_batch(5)#1000)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 100
+BATCH_SIZE = 2#100
 val_interval = BATCH_SIZE*10
-samples_to_process = 200000
+samples_to_process = 200#000
 
 
 samples_processed = 0
 last_valid_samples = 0
 
 print("Training...")
-val_samples = []
-costs, accs = [], []
+output_folder = "output/"
+val_samples, train_samples = [], []
+costs, accs_val, accs_train = [], [], []
 plt.figure()
 verbose = True
 debug = False
@@ -188,7 +189,9 @@ try:
             # print("Eq shape:")
             # print(batch_eq.shape)
         costs += [batch_cost]
+        accs_train += [batch_acc]
         samples_processed += BATCH_SIZE
+        train_samples += [samples_processed]
         #validation data
         # if verbose:
         #     print("\tPossible validation")
@@ -203,19 +206,61 @@ try:
                 print("\tTrain Accuracy: %.2f%%"%(batch_acc*100))
                 print("\tValid Accuracy: %.2f%%"%(val_acc*100))
             val_samples += [samples_processed]
-            accs += [val_acc]
-            plt.plot(val_samples,accs)
-            plt.ylabel('Validation Accuracy', fontsize=15)
+            accs_val += [val_acc]
+
+            ## Make acc png
+            plt.plot(val_samples,accs_val, label='validation')
+            plt.title('', fontsize=20)
+            plt.grid('on')
+            plt.plot(train_samples,accs_train, label='train')
+            plt.ylabel('Accuracy', fontsize=15)
             plt.xlabel('Processed samples', fontsize=15)
             plt.title('', fontsize=20)
             plt.grid('on')
-            plt.savefig("out.png")
+            plt.savefig(output_folder + "acc.png")
+
+            # plt.plot(val_samples,accs_val)
+            # plt.ylabel('Validation Accuracy', fontsize=15)
+            # plt.xlabel('Processed samples', fontsize=15)
+            # plt.title('', fontsize=20)
+            # plt.grid('on')
+            # plt.savefig(output_folder + "acc_val.png")
             # display.display(display.Image(filename="out.png"))
             # display.clear_output(wait=True)
 except KeyboardInterrupt:
     pass
 except:
     traceback.print_exc()
+
+
+## Make valid acc png
+# plt.plot(val_samples,accs_val, label='valid acc')
+# plt.ylabel('Validation Accuracy', fontsize=15)
+# plt.xlabel('Processed samples', fontsize=15)
+# plt.title('', fontsize=20)
+# plt.grid('on')
+# plt.savefig(output_folder + "acc_val.png")
+
+# print(len(costs))
+# print((costs[0]))
+# Make train cost png
+plt.clf()
+plt.plot(train_samples,costs)
+plt.ylabel('Train costs', fontsize=15)
+plt.xlabel('Processed samples', fontsize=15)
+plt.title('', fontsize=20)
+plt.grid('on')
+plt.savefig(output_folder + "cost_train.png")
+
+# print(len(accs_train))
+# print((accs_train[0]))
+## Make train acc png
+# plt.plot(train_samples,accs_train, label='train acc')
+# plt.ylabel('Train Accuracy', fontsize=15)
+# plt.xlabel('Processed samples', fontsize=15)
+# plt.title('', fontsize=20)
+# plt.grid('on')
+# plt.savefig(output_folder + "acc_train.png")
 
 print("Training done, calculating final result...")
 test_acc, test_output = test_func(Xtest, Ytest, Xmask_test)
