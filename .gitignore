@@ -92,4 +92,4 @@ ENV/
 # NCH ignores
 project/mldata
 project/out.png
-project/output
+#project/output
