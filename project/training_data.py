@@ -22,7 +22,7 @@ def discard_example(training_example):
     bad = [1 for attr in training_example['attributes'] if attr['name'].strip() in attr_blacklist]
     return len(bad) > 0
 
-def load_training_data(n_examples=None, seed=1337):
+def load_training_data(n_examples=None, seed=None):
     got_data()
 
     with open(unpacked_data_path) as f:
@@ -36,6 +36,7 @@ def load_training_data(n_examples=None, seed=1337):
     c = 0
     for training_example in raw_training_data:
         if not discard_example(training_example):
+            training_example['id'] = str(c)
             training_data.append(training_example)
             c += 1
             if n_examples is not None and c >= n_examples:
@@ -44,6 +45,7 @@ def load_training_data(n_examples=None, seed=1337):
     if seed is not None:
         random.seed(seed)
         random.shuffle(training_data)
+        print("Shuffled training pages using seed: %s"%str(seed))
     print("Loaded %d training examples"%len(training_data))
     return training_data
 
@@ -105,6 +107,8 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     for example in data_filtered:
         html = example['html'].encode(encoding='utf-8')
 
+        block_count = 0
+
         if example['blocks'][-1]['end'] < len(html):
             index_less += 1
         for block in example['blocks']:
@@ -143,8 +147,11 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
                     total_block_length_orig += len(codes)
                     nr_blocks_orig += 1
 
+                    block_id = example['id'] + '-' + str(block_count)
+
                     # Some blocks are very long, split them up
                     if g_chop_blocks and len(codes) > g_max_block_length:
+                        # print("Slicing blocks")
                         nr_slices = math.ceil(len(codes) / float(g_max_block_length))
                         slice_size = len(codes) / int(nr_slices)
 
@@ -153,20 +160,28 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
 
                         slices = [codes[i:i + slice_size] for i in xrange(0, len(codes), slice_size)]
 
+                        slice_count = 0
                         for s in slices:
                             total_block_length_chop += len(s)
                             nr_blocks_chop += 1
                             longest_block = max(longest_block, len(s))
                             shortest_block = min(shortest_block, len(s))
-                            data_blocks.append({'data': np.array(s).astype('int32'), 'label': np.array(label)})
+
+                            slice_id = block_id + '-' + str(slice_count)
+
+                            data_blocks.append({'data': np.array(s).astype('int32'), 'label': np.array(label), 'id': slice_id})
+                            slice_count += 1
                     else: # All blocks retain their size
+                        # print("Keeping original block")
                         longest_block = max(longest_block, len(codes))
                         shortest_block = min(shortest_block, len(codes))
-                        data_blocks.append({'data': np.array(codes).astype('int32'), 'label': np.array(label)})
+                        data_blocks.append({'data': np.array(codes).astype('int32'), 'label': np.array(label), 'id': block_id})
+                    block_count += 1
                 else:
                     longest_block = max(longest_block, len(b_html))
                     shortest_block = min(shortest_block, len(b_html))
                     data_blocks.append({'label': b_label, 'data':b_html})
+
 
     if encode:
         for data_block in data_blocks:
@@ -229,7 +244,7 @@ def encoding_statistics(encodings, take=5):
     if seenZero:
         print("Saw character with value 0")
 
-def get_batch(num_blocks):
+def get_batch(num_blocks, return_ids = False):
     global data_blocks_encoded
     global g_longest_block
     global i_train_end
@@ -244,6 +259,7 @@ def get_batch(num_blocks):
         X = np.zeros(shape=(batch_size, g_longest_block)).astype('int32')
         y = np.zeros(shape=(batch_size, 1)).astype('int32')
         Xmask = np.zeros(shape=(batch_size, g_longest_block)).astype('int32')
+        Ids = []
     except:
         if verbose:
             traceback.print_exc
@@ -255,9 +271,12 @@ def get_batch(num_blocks):
         X[idx] = example['data']
         y[idx] = example['label']
         Xmask[idx] = example['mask']
+        Ids.append(example['id'])
         i_train_current += 1
         idx += 1
 
+    if return_ids:
+        return X, y, Xmask, Ids
     return X, y, Xmask
 
 def reset_batches():
@@ -271,6 +290,20 @@ g_max_block_length = 1000
 g_chop_blocks = True
 i_train_current = 0
 i_train_end = 50
-data_filtered = load_training_data(9)
+data_filtered = load_training_data(seed=1337)
+
+# print("Page ids:")
+# for d in data_filtered:
+    # print(d['id'])
+
 data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
+
+# print("Block ids:")
+# for d in data_blocks_encoded:
+    # print(d['id'])
+
 # encoding_statistics(encodings)
+
+# sample = data_blocks_encoded[663:666]
+# for s in sample:
+#     print(s)

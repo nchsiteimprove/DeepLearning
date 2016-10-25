@@ -112,6 +112,9 @@ mean_cost = T.mean(total_cost)
 argmax = T.argmax(output_train, axis=-1)#, keepdims=True)
 eq = T.eq(argmax, y_sym)
 acc = T.mean(eq)
+# argmax = T.argmax(output_train, axis=-1)#, keepdims=True)
+#
+# acc = T.mean(bla)
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
@@ -124,7 +127,7 @@ print "-"*40
 all_grads = [T.clip(g,-3,3) for g in T.grad(mean_cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
-updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.005)
+updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.05)
 
 train_func = theano.function([x_sym, y_sym, xmask_sym], [mean_cost, acc, output_train, argmax, eq, total_cost], updates=updates)
 
@@ -132,13 +135,13 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test])
 
 reset_batches()
 # Generate validation data
-Xval, Yval, Xmask_val = get_batch(200)
-Xtest, Ytest, Xmask_test = get_batch(200)
+Xval, Yval, Xmask_val = get_batch(1000)
+Xtest, Ytest, Xmask_test = get_batch(1000)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 1
+BATCH_SIZE = 100
 val_interval = BATCH_SIZE*10
 samples_to_process = 200000
 
@@ -158,12 +161,17 @@ try:
         if verbose:
             print("Batch %d"%batch_count)
             batch_count += 1
+        if debug:
             print("\tGetting batch")
         x_, ys_, x_masks_ = \
             get_batch(BATCH_SIZE)
-        if x_ is None:
+        # if len(ids_) == 1:
+        #     print(ids_[0])
+        # else:
+        #     print(len(ids_))
+        if x_ is None or len(x_) == 0:
             break
-        if verbose:
+        if debug:
             print("\tTraining batch")
         batch_cost, batch_acc, batch_output, batch_argmax, batch_eq, batch_total_cost = train_func(x_, ys_, x_masks_)
         if debug:
@@ -192,7 +200,8 @@ try:
             val_acc, val_output = test_func(Xval, Yval, Xmask_val)
             # print(val_output)
             if verbose:
-                print("\tAccuracy: %.2f%%"%(val_acc*100))
+                print("\tTrain Accuracy: %.2f%%"%(batch_acc*100))
+                print("\tValid Accuracy: %.2f%%"%(val_acc*100))
             val_samples += [samples_processed]
             accs += [val_acc]
             plt.plot(val_samples,accs)
@@ -208,23 +217,38 @@ except KeyboardInterrupt:
 except:
     traceback.print_exc()
 
-print("Training done, final result")
-# test_acc, test_output = test_func(Xtest, Ytest, Xmask_test)
-test_acc, test_output = test_func(Xval, Yval, Xmask_val)
+print("Training done, calculating final result...")
+test_acc, test_output = test_func(Xtest, Ytest, Xmask_test)
 
-nr_examples = 0
-nr_correct = 0
-for y_out, y_label in zip(test_output, Ytest):
-    nr_examples += 1
-    guess = np.argmax(y_out)
-    if debug:
-        print(y_out)
-        print(guess)
-    if guess == y_label:
-        nr_correct += 1
-
-verified_acc = nr_correct / float(nr_examples) * 100
-
+# nr_examples = 0
+# nr_correct = 0
+# guesses = []
+# for y_out, y_label in zip(test_output, Ytest):
+#     nr_examples += 1
+#     guess = np.argmax(y_out)
+#     if debug:
+#         print(y_out)
+#         print(guess)
+#     if guess == y_label:
+#         nr_correct += 1
+#         guesses.append(1)
+#     else:
+#         guesses.append(0)
+#
+# verified_acc = nr_correct / float(nr_examples) * 100.0
+# verified_acc_mean = np.mean(guesses) * 100.0
+#
+# np_max = np.argmax(test_output, axis=-1)
+# np_test = np.equal(np_max, Ytest)
+# np_ones_zeros = []
+# for b in np_test:
+#     if b[0]:
+#         np_ones_zeros.append(1)
+#     else:
+#         np_ones_zeros.append(0)
+# verified_acc_mean_np = np.mean(np_ones_zeros) * 100.0
 
 print("Accuracy: %.2f%%"%(test_acc*100))
-print("verified accuracy: %.2f%%"%verified_acc)
+# print("Verified accuracy: %.2f%%"%verified_acc)
+# print("Verified accuracy mean: %.2f%%"%verified_acc_mean)
+# print("Verified accuracy mean numpy: %.2f%%"%verified_acc_mean_np)
