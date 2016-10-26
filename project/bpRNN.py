@@ -95,7 +95,7 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 30 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 5 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
@@ -164,7 +164,7 @@ print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_s
 l_reshape = lasagne.layers.ReshapeLayer(l_gru_dec, (-1, [2]))
 print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-### TODO: Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes
+### TODO: Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes?
 l_softmax = DenseLayer(incoming=l_reshape, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
 print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
@@ -183,6 +183,10 @@ reshaped = T.reshape(output_train, (-1, NUM_OUTPUTS))
 flattened = y_sym.flatten()
 # print("Reshaped: %s"%str(reshaped.shape))
 # print("Flattened: %s"%str(flattened.shape))
+### Binary cross entropy is designed to work on a scalar value and works well
+### with a Sigmoid output for binary classification.
+### Categorical cross entropy is designed to work on a vector of data
+### and makes sense to use with a softmax output.
 total_cost = T.nnet.categorical_crossentropy(reshaped, flattened)
 mean_cost = T.mean(total_cost)
 
@@ -193,12 +197,19 @@ acc = T.mean(eq)
 
 target = 1
 
-true_pos = (T.eq(y_sym, target) * T.eq(y_pred, target)).sum()
-true_neg = (T.neq(y_sym, target) * T.neq(y_pred, target)).sum()
-false_pos = (T.neq(y_sym, target) * T.eq(y_pred, target)).sum()
-false_neg = (T.eq(y_sym, target) * T.neq(y_pred, target)).sum()
+cost_true_pos = (T.eq(y_sym, target) * T.eq(y_pred, target)).sum()
+cost_true_neg = (T.neq(y_sym, target) * T.neq(y_pred, target)).sum()
+cost_false_pos = (T.neq(y_sym, target) * T.eq(y_pred, target)).sum()
+cost_false_neg = (T.eq(y_sym, target) * T.neq(y_pred, target)).sum()
 
-positives = y_sym.sum()
+cost_total_examples = cost_true_pos + cost_true_neg + cost_false_pos + cost_false_neg
+cost_positives = y_sym.sum()
+
+# cost_recall = calc_recall(cost_true_pos, cost_false_neg)
+# cost_precision = calc_precision(cost_true_pos, cost_false_pos)
+# cost_f1 = calc_f1(cost_precision, cost_recall)
+
+cost = cost_true_pos / cost_total_examples#mean_cost
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
@@ -208,14 +219,14 @@ all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 #     print param, param.get_value().shape
 # print "-"*40
 
-all_grads = [T.clip(g,-3,3) for g in T.grad(mean_cost, all_parameters)]
+all_grads = [T.clip(g,-3,3) for g in T.grad(cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
 updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.9)
 
-train_func = theano.function([x_sym, y_sym, xmask_sym], [mean_cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
+train_func = theano.function([x_sym, y_sym, xmask_sym], [cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
-test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, true_pos, true_neg, false_pos, false_neg, positives])
+test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, cost_true_pos, cost_true_neg, cost_false_pos, cost_false_neg, cost_positives])
 
 reset_batches()
 # Generate validation data
