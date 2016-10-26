@@ -74,6 +74,24 @@ def timing_human_readable(elapsed):
     days = hours / 24.0
     return days, 'd'
 
+def calc_recall(true_pos, false_neg):
+    divisor = true_pos + false_neg
+    if divisor == 0:
+        divisor = 1
+    return float(true_pos) / divisor
+
+def calc_precision(true_pos, false_pos):
+    divisor = true_pos + false_pos
+    if divisor == 0:
+        divisor = 1
+    return float(true_pos) / divisor
+
+def calc_f1(precision, recall):
+    divisor = precision+recall
+    if divisor == 0:
+        divisor = 1
+    return 2 * float(precision*recall) / divisor
+
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
@@ -193,7 +211,7 @@ all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 all_grads = [T.clip(g,-3,3) for g in T.grad(mean_cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
-updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.5)
+updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.9)
 
 train_func = theano.function([x_sym, y_sym, xmask_sym], [mean_cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
@@ -290,9 +308,9 @@ try:
 
             val_acc, val_output, true_pos, true_neg, false_pos, false_neg, positive = test_network(Xval, Yval, Xmask_val, slice_size)
 
-            recall = float(true_pos) / max(true_pos + false_neg, 1)
-            precision = float(true_pos) / max(true_pos + false_pos, 1)
-            f1 = 2 * (precision*recall)/max(precision+recall, 1)
+            recall = calc_recall(true_pos, false_neg)
+            precision = calc_precision(true_pos, false_pos)
+            f1 = calc_f1(precision, recall)
 
             # print(val_output)
             if verbose:
@@ -427,9 +445,9 @@ print("False negatives: %d"%false_neg)
 print("of %d training examples"%len(test_output))
 print("with %d positive labels"%positive)
 
-recall = float(true_pos) / max(true_pos + false_neg, 1)
-precision = float(true_pos) / max(true_pos + false_pos, 1)
-f1 = 2 * (precision*recall)/max(precision+recall, 1)
+recall = calc_recall(true_pos, false_neg)
+precision = calc_precision(true_pos, false_pos)
+f1 = calc_f1(precision, recall)
 print("")
 print("Precision: %.2f%%"%(precision * 100.0))
 print("Recall: %.2f%%"%(recall * 100.0))
