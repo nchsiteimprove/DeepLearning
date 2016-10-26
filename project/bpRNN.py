@@ -127,21 +127,21 @@ l_enc_bcwrd_dropout = DropoutLayer(incoming=l_gru_enc_bckwrd)
 l_enc = ConcatLayer([l_enc_frwrd_dropout, l_enc_bcwrd_dropout], axis=-1)
 print(get_output(l_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-# l_slice = SliceLayer(l_enc, indices=-1, axis=1)
-# print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+l_slice = SliceLayer(l_enc, indices=-1, axis=1)
+print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ###### End of Encoder ######
 
 ###### Start of Decoder ######
-# l_in_rep = RepeatLayer(l_slice, n=MAX_OUT_LABELS)
-# print("Repeat layer")
-# print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
-#     {x_sym: X, xmask_sym: Xmask}).shape
-#
-# l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
-# print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+l_in_rep = RepeatLayer(l_slice, n=MAX_OUT_LABELS)
+print("Repeat layer")
+print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
+    {x_sym: X, xmask_sym: Xmask}).shape
 
-l_dec = LSTMAttentionDecodeFeedbackLayer(incoming=l_enc, num_units=NUM_UNITS_DEC)
+l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
+print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+
+# l_dec = LSTMAttentionDecodeFeedbackLayer(incoming=l_enc, num_units=NUM_UNITS_DEC)
 
 l_reshape = lasagne.layers.ReshapeLayer(l_gru_dec, (-1, [2]))
 print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
