@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from lasagne.nonlinearities import linear
 from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer, DropoutLayer
-# from decoder_attention import LSTMAttentionDecodeFeedbackLayer
+from decoder_attention import LSTMAttentionDecodeFeedbackLayer
 from training_data import get_batch, reset_batches, encodings, max_encoding, slice_list
 
 class RepeatLayer(lasagne.layers.Layer):
@@ -34,12 +34,12 @@ class RepeatLayer(lasagne.layers.Layer):
         return stacked.dimshuffle(dim)
 
 def test_network(X, Y, Xmask, slice_size):
-    accs, outputs, true_poss, true_negs, false_poss, false_negs, positives = [], [], [], [], [], [], []
+    accs, outputs, true_poss, true_negs, false_poss, false_negs, positives, alphas = [], [], [], [], [], [], [], []
     X_slices = slice_list(X, slice_size)
     Y_slices = slice_list(Y, slice_size)
     Xmask_slices = slice_list(Xmask, slice_size)
     for X_slice, Y_slice, Xmask_slice in zip(X_slices, Y_slices, Xmask_slices):
-        acc_slice, output_slice, true_pos_slice, true_neg_slice, false_pos_slice, false_neg_slice, positives_slice = test_func(X_slice, Y_slice, Xmask_slice)
+        acc_slice, output_slice, true_pos_slice, true_neg_slice, false_pos_slice, false_neg_slice, positives_slice, alphas_slice = test_func(X_slice, Y_slice, Xmask_slice)
 
         accs += [acc_slice]
         outputs += [output_slice]
@@ -48,6 +48,7 @@ def test_network(X, Y, Xmask, slice_size):
         false_poss += [false_pos_slice]
         false_negs += [false_neg_slice]
         positives += [positives_slice]
+        alphas += [alphas_slice]
 
     acc = np.mean(accs)
     output = np.concatenate(outputs)
@@ -56,8 +57,9 @@ def test_network(X, Y, Xmask, slice_size):
     false_pos = np.sum(false_poss)
     false_neg = np.sum(false_negs)
     positive = np.sum(positives)
+    alpha = np.concatenate(alphas)
 
-    return acc, output, true_pos, true_neg, false_pos, false_neg, positive
+    return acc, output, true_pos, true_neg, false_pos, false_neg, positive, alpha
 
 def timing_human_readable(elapsed):
     if elapsed < 60:
@@ -97,6 +99,7 @@ NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
 NUM_UNITS_ENC = 30 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
+NUM_UNITS_DEC_ALIGN = 20
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
 x_sym = T.imatrix()
@@ -124,6 +127,8 @@ l_mask_enc = InputLayer(shape=(None, None))
 
 l_gru_enc_frwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc)
 print(get_output(l_gru_enc_frwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+T.grad(lasagne.layers.get_output(l_gru_enc_frwrd, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).sum(),
+       lasagne.layers.get_all_params(l_gru_enc_frwrd, trainable=True))
 
 l_enc_frwrd_dropout = DropoutLayer(incoming=l_gru_enc_frwrd)
 
@@ -134,6 +139,8 @@ l_enc_frwrd_dropout = DropoutLayer(incoming=l_gru_enc_frwrd)
 
 l_gru_enc_bckwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc, backwards=True)
 print(get_output(l_gru_enc_bckwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+T.grad(lasagne.layers.get_output(l_gru_enc_bckwrd, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).sum(),
+       lasagne.layers.get_all_params(l_gru_enc_bckwrd, trainable=True))
 
 l_enc_bcwrd_dropout = DropoutLayer(incoming=l_gru_enc_bckwrd)
 
@@ -144,24 +151,30 @@ l_enc_bcwrd_dropout = DropoutLayer(incoming=l_gru_enc_bckwrd)
 
 l_enc = ConcatLayer([l_enc_frwrd_dropout, l_enc_bcwrd_dropout], axis=-1)
 print(get_output(l_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+T.grad(lasagne.layers.get_output(l_enc, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).sum(),
+       lasagne.layers.get_all_params(l_enc, trainable=True))
 
-l_slice = SliceLayer(l_enc, indices=-1, axis=1)
-print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# l_slice = SliceLayer(l_enc, indices=-1, axis=1)
+# print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ###### End of Encoder ######
 
 ###### Start of Decoder ######
-l_in_rep = RepeatLayer(l_slice, n=MAX_OUT_LABELS)
-print("Repeat layer")
-print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
+# l_in_rep = RepeatLayer(l_slice, n=MAX_OUT_LABELS)
+# print("Repeat layer")
+# print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
+#     {x_sym: X, xmask_sym: Xmask}).shape
+#
+# l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
+# print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+
+l_dec = LSTMAttentionDecodeFeedbackLayer(incoming=l_enc, num_units=NUM_UNITS_DEC, aln_num_units=NUM_UNITS_DEC_ALIGN, n_decodesteps=MAX_OUT_LABELS)
+print lasagne.layers.get_output(l_dec, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
     {x_sym: X, xmask_sym: Xmask}).shape
+T.grad(lasagne.layers.get_output(l_dec, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).sum(),
+       lasagne.layers.get_all_params(l_dec, trainable=True))
 
-l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
-print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
-
-# l_dec = LSTMAttentionDecodeFeedbackLayer(incoming=l_enc, num_units=NUM_UNITS_DEC)
-
-l_reshape = lasagne.layers.ReshapeLayer(l_gru_dec, (-1, [2]))
+l_reshape = lasagne.layers.ReshapeLayer(l_dec, (-1, [2]))
 print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ### TODO: Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes
@@ -170,6 +183,8 @@ print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_s
 
 l_out = lasagne.layers.ReshapeLayer(l_softmax, (x_sym.shape[0], -1, NUM_OUTPUTS))
 print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+T.grad(lasagne.layers.get_output(l_out, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).sum(),
+       lasagne.layers.get_all_params(l_out, trainable=True))
 
 print("")
 ###### End of Decoder ######
@@ -181,8 +196,7 @@ output_test = get_output(l_out, inputs={l_in: x_sym, l_mask_enc:xmask_sym}, dete
 # Cost function
 reshaped = T.reshape(output_train, (-1, NUM_OUTPUTS))
 flattened = y_sym.flatten()
-# print("Reshaped: %s"%str(reshaped.shape))
-# print("Flattened: %s"%str(flattened.shape))
+
 total_cost = T.nnet.categorical_crossentropy(reshaped, flattened)
 mean_cost = T.mean(total_cost)
 
@@ -198,6 +212,9 @@ true_neg = (T.neq(y_sym, target) * T.neq(y_pred, target)).sum()
 false_pos = (T.neq(y_sym, target) * T.eq(y_pred, target)).sum()
 false_neg = (T.eq(y_sym, target) * T.neq(y_pred, target)).sum()
 
+## Alternative cost based on true_pos as well as cross entropy
+cost = mean_cost#(mean_cost + true_pos) / 2.0
+
 positives = y_sym.sum()
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
@@ -208,14 +225,14 @@ all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 #     print param, param.get_value().shape
 # print "-"*40
 
-all_grads = [T.clip(g,-3,3) for g in T.grad(mean_cost, all_parameters)]
+all_grads = [T.clip(g,-3,3) for g in T.grad(cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
 updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.9)
 
-train_func = theano.function([x_sym, y_sym, xmask_sym], [mean_cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
+train_func = theano.function([x_sym, y_sym, xmask_sym], [cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
-test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, true_pos, true_neg, false_pos, false_neg, positives])
+test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, true_pos, true_neg, false_pos, false_neg, positives, l_dec.aplha])
 
 reset_batches()
 # Generate validation data
@@ -282,7 +299,6 @@ try:
         #validation data
         # if verbose:
         #     print("\tPossible validation")
-        #TODO: Collect samples and plot only when validating
         if samples_processed - last_valid_samples > val_interval:
             print_timing = True
             last_valid_samples = samples_processed
@@ -306,7 +322,7 @@ try:
             # val_acc = np.mean(val_accs)
             # val_output = np.mean(val_outputs)
 
-            val_acc, val_output, true_pos, true_neg, false_pos, false_neg, positive = test_network(Xval, Yval, Xmask_val, slice_size)
+            val_acc, val_output, true_pos, true_neg, false_pos, false_neg, positive, alpha = test_network(Xval, Yval, Xmask_val, slice_size)
 
             recall = calc_recall(true_pos, false_neg)
             precision = calc_precision(true_pos, false_pos)
@@ -320,6 +336,7 @@ try:
             val_samples += [samples_processed]
             accs_val += [val_acc]
 
+            #TODO: Fix labels/legend on graphs
             ## Make acc png
             plt.plot(val_samples,accs_val, label='validation')
             plt.title('', fontsize=20)
@@ -393,7 +410,7 @@ plt.savefig(output_folder + "cost_train.png")
 
 print("Training done, calculating final result...")
 t_start = time.time()
-test_acc, test_output, true_pos, true_neg, false_pos, false_neg, positive = test_network(Xtest, Ytest, Xmask_test, slice_size)
+test_acc, test_output, true_pos, true_neg, false_pos, false_neg, positive, alpha = test_network(Xtest, Ytest, Xmask_test, slice_size)
 
 # nr_examples = 0
 # nr_correct = 0
