@@ -8,7 +8,8 @@ import matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 from lasagne.nonlinearities import linear
-from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer, DropoutLayer, LSTMAttentionDecodeFeedbackLayer
+from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer, DropoutLayer
+# from decoder_attention import LSTMAttentionDecodeFeedbackLayer
 from training_data import get_batch, reset_batches, encodings, max_encoding, slice_list
 
 class RepeatLayer(lasagne.layers.Layer):
@@ -123,22 +124,24 @@ l_enc_bcwrd_dropout = DropoutLayer(incoming=l_gru_enc_bckwrd)
 #
 # l_enc_bcwrd_dropout2 = DropoutLayer(incoming=l_gru_enc_bckwrd2)
 
-l_gru_enc = ConcatLayer([l_enc_frwrd_dropout, l_enc_bcwrd_dropout], axis=-1)
-print(get_output(l_gru_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+l_enc = ConcatLayer([l_enc_frwrd_dropout, l_enc_bcwrd_dropout], axis=-1)
+print(get_output(l_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_slice = SliceLayer(l_gru_enc, indices=-1, axis=1)
-print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# l_slice = SliceLayer(l_enc, indices=-1, axis=1)
+# print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ###### End of Encoder ######
 
 ###### Start of Decoder ######
-l_in_rep = RepeatLayer(l_slice, n=MAX_OUT_LABELS)
-print("Repeat layer")
-print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
-    {x_sym: X, xmask_sym: Xmask}).shape
+# l_in_rep = RepeatLayer(l_slice, n=MAX_OUT_LABELS)
+# print("Repeat layer")
+# print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
+#     {x_sym: X, xmask_sym: Xmask}).shape
+#
+# l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
+# print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
-print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+l_dec = LSTMAttentionDecodeFeedbackLayer(incoming=l_enc, num_units=NUM_UNITS_DEC)
 
 l_reshape = lasagne.layers.ReshapeLayer(l_gru_dec, (-1, [2]))
 print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
@@ -150,6 +153,7 @@ print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_s
 l_out = lasagne.layers.ReshapeLayer(l_softmax, (x_sym.shape[0], -1, NUM_OUTPUTS))
 print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
+print("")
 ###### End of Decoder ######
 
 # Define evaluation functions
@@ -254,10 +258,9 @@ try:
             # print(batch_y_pred.shape)
             # print("Eq shape:")
             # print(batch_eq.shape)
-        costs += [batch_cost]
-        accs_train += [batch_acc]
+
         samples_processed += BATCH_SIZE
-        train_samples += [samples_processed]
+
         #validation data
         # if verbose:
         #     print("\tPossible validation")
@@ -265,6 +268,12 @@ try:
         if samples_processed - last_valid_samples > val_interval:
             print_timing = True
             last_valid_samples = samples_processed
+
+            ## Only track these here to get more readable graphs
+            costs += [batch_cost]
+            accs_train += [batch_acc]
+            train_samples += [samples_processed]
+
             #print "validating"
             if verbose:
                 print("\tValidating network")
@@ -297,7 +306,7 @@ try:
             plt.plot(val_samples,accs_val, label='validation')
             plt.title('', fontsize=20)
             plt.grid('on')
-            plt.plot(train_samples[::val_interval],accs_train[::val_interval], label='train')
+            plt.plot(train_samples,accs_train, label='train')
             plt.ylabel('Accuracy', fontsize=15)
             plt.xlabel('Processed samples', fontsize=15)
             plt.title('', fontsize=20)
@@ -347,7 +356,7 @@ except:
 # print((costs[0]))
 # Make train cost png
 plt.clf()
-plt.plot(train_samples[::val_interval],costs[::val_interval])
+plt.plot(train_samples,costs)
 plt.ylabel('Train costs', fontsize=15)
 plt.xlabel('Processed samples', fontsize=15)
 plt.title('', fontsize=20)
