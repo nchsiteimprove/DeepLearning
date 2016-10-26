@@ -99,7 +99,7 @@ NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
 NUM_UNITS_ENC = 30 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
-NUM_UNITS_DEC_ALIGN = 20
+NUM_UNITS_DEC_ALIGN = 1
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
 x_sym = T.imatrix()
@@ -168,11 +168,12 @@ T.grad(lasagne.layers.get_output(l_enc, inputs={l_in: x_sym, l_mask_enc: xmask_s
 # l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
 # print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_dec = LSTMAttentionDecodeFeedbackLayer(incoming=l_enc, num_units=NUM_UNITS_DEC, aln_num_units=NUM_UNITS_DEC_ALIGN, n_decodesteps=MAX_OUT_LABELS)
+l_dec = LSTMAttentionDecodeFeedbackLayer(incoming=l_enc, num_units=NUM_UNITS_DEC*2, aln_num_units=NUM_UNITS_DEC_ALIGN, n_decodesteps=MAX_OUT_LABELS)
 print lasagne.layers.get_output(l_dec, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
     {x_sym: X, xmask_sym: Xmask}).shape
-T.grad(lasagne.layers.get_output(l_dec, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).sum(),
-       lasagne.layers.get_all_params(l_dec, trainable=True))
+test_out = lasagne.layers.get_output(l_dec, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).sum()
+test_params = lasagne.layers.get_all_params(l_dec, trainable=True)
+T.grad(test_out, test_params)
 
 l_reshape = lasagne.layers.ReshapeLayer(l_dec, (-1, [2]))
 print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
