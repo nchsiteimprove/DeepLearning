@@ -8,7 +8,7 @@ import matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 from lasagne.nonlinearities import linear
-from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer
+from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer, DropoutLayer, LSTMAttentionDecodeFeedbackLayer
 from training_data import get_batch, reset_batches, encodings, max_encoding, slice_list
 
 class RepeatLayer(lasagne.layers.Layer):
@@ -62,10 +62,16 @@ def timing_human_readable(elapsed):
     if elapsed < 60:
         return elapsed, 's'
 
-    minutes = elapsed / 60
-    seconds = elapsed % 60
+    minutes = elapsed / 60.0
+    if minutes < 60:
+        return minutes, 'm'
 
-    return elapsed, 's'
+    hours = minutes / 60.0
+    if hours < 24:
+        return hours, 'h'
+
+    days = hours / 24.0
+    return days, 'd'
 
 # Variables
 NUM_OUTPUTS = 2
@@ -100,10 +106,24 @@ l_mask_enc = InputLayer(shape=(None, None))
 l_gru_enc_frwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc)
 print(get_output(l_gru_enc_frwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
+l_enc_frwrd_dropout = DropoutLayer(incoming=l_gru_enc_frwrd)
+
+# l_gru_enc_frwrd2 = GRULayer(incoming=l_enc_frwrd_dropout, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc)
+# print(get_output(l_gru_enc_frwrd2, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+#
+# l_enc_frwrd_dropout2 = DropoutLayer(incoming=l_gru_enc_frwrd2)
+
 l_gru_enc_bckwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc, backwards=True)
 print(get_output(l_gru_enc_bckwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_gru_enc = ConcatLayer([l_gru_enc_frwrd, l_gru_enc_bckwrd], axis=-1)
+l_enc_bcwrd_dropout = DropoutLayer(incoming=l_gru_enc_bckwrd)
+
+# l_gru_enc_bckwrd2 = GRULayer(incoming=l_enc_bcwrd_dropout, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc, backwards=True)
+# print(get_output(l_gru_enc_bckwrd2, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+#
+# l_enc_bcwrd_dropout2 = DropoutLayer(incoming=l_gru_enc_bckwrd2)
+
+l_gru_enc = ConcatLayer([l_enc_frwrd_dropout, l_enc_bcwrd_dropout], axis=-1)
 print(get_output(l_gru_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 l_slice = SliceLayer(l_gru_enc, indices=-1, axis=1)
@@ -169,7 +189,7 @@ all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 all_grads = [T.clip(g,-3,3) for g in T.grad(mean_cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
-updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.05)
+updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.5)
 
 train_func = theano.function([x_sym, y_sym, xmask_sym], [mean_cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
@@ -178,15 +198,15 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, true_p
 reset_batches()
 # Generate validation data
 slice_size = 1000
-Xval, Yval, Xmask_val = get_batch(10000)
-Xtest, Ytest, Xmask_test = get_batch(10000)
+Xval, Yval, Xmask_val = get_batch(5000)
+Xtest, Ytest, Xmask_test = get_batch(35000)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
 BATCH_SIZE = 100
 val_interval = BATCH_SIZE*10
-samples_to_process = 200000
+samples_to_process = 240000
 
 
 samples_processed = 0
@@ -241,6 +261,7 @@ try:
         #validation data
         # if verbose:
         #     print("\tPossible validation")
+        #TODO: Collect samples and plot only when validating
         if samples_processed - last_valid_samples > val_interval:
             print_timing = True
             last_valid_samples = samples_processed
@@ -276,7 +297,7 @@ try:
             plt.plot(val_samples,accs_val, label='validation')
             plt.title('', fontsize=20)
             plt.grid('on')
-            plt.plot(train_samples,accs_train, label='train')
+            plt.plot(train_samples[::val_interval],accs_train[::val_interval], label='train')
             plt.ylabel('Accuracy', fontsize=15)
             plt.xlabel('Processed samples', fontsize=15)
             plt.title('', fontsize=20)
@@ -303,10 +324,10 @@ try:
             batches_left = (samples_to_process - samples_processed) / BATCH_SIZE
             t_left = batches_left * t_avg
 
-            time, form = timing_human_readable(t_spent)
-            print("\tTime spent: %.2f%s"%(time, form))
-            time, form = timing_human_readable(t_left)
-            print("\tEstimated time left: %.2f"%(time, form))
+            t, form = timing_human_readable(t_spent)
+            print("\tTime spent: %.2f%s"%(t, form))
+            t, form = timing_human_readable(t_left)
+            print("\tEstimated time left: %.2f%s"%(t, form))
 
 except KeyboardInterrupt:
     pass
@@ -326,7 +347,7 @@ except:
 # print((costs[0]))
 # Make train cost png
 plt.clf()
-plt.plot(train_samples,costs)
+plt.plot(train_samples[::val_interval],costs[::val_interval])
 plt.ylabel('Train costs', fontsize=15)
 plt.xlabel('Processed samples', fontsize=15)
 plt.title('', fontsize=20)
@@ -380,8 +401,10 @@ t_dur = t_end - t_start
 
 batch_durations.append(t_dur)
 t_total = sum(batch_durations)
-print("Test time: %.2f"%t_dur)
-print("Total time: %.2f"%t_total)
+t, form = timing_human_readable(t_dur)
+print("Test time: %.2f%s"%(t, form))
+t, form = timing_human_readable(t_total)
+print("Total time: %.2f%s"%(t, form))
 
 print("Accuracy: %.2f%%"%(test_acc*100))
 # print("Verified accuracy: %.2f%%"%verified_acc)
