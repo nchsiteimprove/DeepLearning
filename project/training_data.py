@@ -103,6 +103,12 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     global g_max_block_length
     global verbose
     global max_encoding
+
+    global content_examples
+    global boilerplate_examples
+    content_examples = 0
+    boilerplate_examples = 0
+
     code_max = max_encoding - 1
 
     if encode:
@@ -174,11 +180,20 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
 
                             data_blocks.append({'data': np.array(s).astype('int32'), 'label': np.array(label), 'id': slice_id})
                             slice_count += 1
+
+                            if b_label == 1:
+                                content_examples += 1
+                            if b_label == 0:
+                                boilerplate_examples += 1
                     else: # All blocks retain their size
                         # print("Keeping original block")
                         longest_block = max(longest_block, len(codes))
                         shortest_block = min(shortest_block, len(codes))
                         data_blocks.append({'data': np.array(codes).astype('int32'), 'label': np.array(label), 'id': block_id})
+                        if b_label == 1:
+                            content_examples += 1
+                        if b_label == 0:
+                            boilerplate_examples += 1
                     block_count += 1
                 else:
                     longest_block = max(longest_block, len(b_html))
@@ -247,6 +262,15 @@ def encoding_statistics(encodings, take=5):
     if seenZero:
         print("Saw character with value 0")
 
+def expand_data(content_frac = 0.5):
+    global content_examples
+    global boilerplate_examples
+    global data_blocks_encoded
+
+    content_sample_multpl = int((content_frac * boilerplate_examples) / (content_examples * (1 - content_frac)))
+
+    #TODO: Multiply each content example. Maybe shuffle after?
+
 def get_batch(num_blocks, return_ids = False):
     global data_blocks_encoded
     global g_longest_block
@@ -293,13 +317,20 @@ g_max_block_length = 1000
 g_chop_blocks = True
 i_train_current = 0
 i_train_end = 50
-data_filtered = load_training_data(9, seed=1337)
+content_examples = None
+boilerplate_examples = None
+data_filtered = load_training_data(seed=1337)
+
 
 # print("Page ids:")
 # for d in data_filtered:
     # print(d['id'])
 
 data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
+
+print("Content examples: %d"%content_examples)
+print("Boilerplate examples: %d"%boilerplate_examples)
+print("%.2f%% content"%((float(content_examples)/(content_examples + boilerplate_examples)) * 100))
 
 # print("Block ids:")
 # for d in data_blocks_encoded:

@@ -95,7 +95,7 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 5 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 50 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
@@ -197,19 +197,19 @@ acc = T.mean(eq)
 
 target = 1
 
-cost_true_pos = (T.eq(y_sym, target) * T.eq(y_pred, target)).sum()
-cost_true_neg = (T.neq(y_sym, target) * T.neq(y_pred, target)).sum()
-cost_false_pos = (T.neq(y_sym, target) * T.eq(y_pred, target)).sum()
-cost_false_neg = (T.eq(y_sym, target) * T.neq(y_pred, target)).sum()
+c_true_pos = (T.eq(y_sym, target) * T.eq(y_pred, target)).sum()
+c_true_neg = (T.neq(y_sym, target) * T.neq(y_pred, target)).sum()
+c_false_pos = (T.neq(y_sym, target) * T.eq(y_pred, target)).sum()
+c_false_neg = (T.eq(y_sym, target) * T.neq(y_pred, target)).sum()
 
-cost_total_examples = cost_true_pos + cost_true_neg + cost_false_pos + cost_false_neg
-cost_positives = y_sym.sum()
+c_total_examples = c_true_pos + c_true_neg + c_false_pos + c_false_neg
+c_positives = y_sym.sum()
 
-# cost_recall = calc_recall(cost_true_pos, cost_false_neg)
-# cost_precision = calc_precision(cost_true_pos, cost_false_pos)
-# cost_f1 = calc_f1(cost_precision, cost_recall)
+c_recall = c_true_pos / (c_true_pos + c_false_neg + 0.0001)
+c_precision = c_true_pos / (c_true_pos + c_false_pos + 0.0001)
+c_f1 = 2 * (c_precision * c_recall) / (c_precision + c_recall + 0.0001)
 
-cost = cost_true_pos / cost_total_examples#mean_cost
+cost = c_f1#mean_cost
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
@@ -226,7 +226,7 @@ updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.9)
 
 train_func = theano.function([x_sym, y_sym, xmask_sym], [cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
-test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, cost_true_pos, cost_true_neg, cost_false_pos, cost_false_neg, cost_positives])
+test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, c_true_pos, c_true_neg, c_false_pos, c_false_neg, c_positives])
 
 reset_batches()
 # Generate validation data
@@ -327,7 +327,7 @@ try:
             if verbose:
                 print("\tTrain Accuracy: %.2f%%"%(batch_acc*100))
                 print("\tValid Accuracy: %.2f%%"%(val_acc*100))
-                print("\tF1: %.2f%%"%(f1))
+                print("\tValid F1: %.2f%%"%(f1*100))
             val_samples += [samples_processed]
             accs_val += [val_acc]
 
