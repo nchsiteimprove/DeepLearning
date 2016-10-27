@@ -112,7 +112,7 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     code_max = max_encoding - 1
 
     if encode:
-        print("Encoding training data...")
+        print("\nEncoding training data...")
     for example in data_filtered:
         html = example['html'].encode(encoding='utf-8')
 
@@ -233,7 +233,7 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     return data_blocks, encodings
 
 def encoding_statistics(encodings, take=5):
-    print("Encoded %d tokens"%len(encodings))
+    print("\nEncoded %d tokens"%len(encodings))
     sort = sorted(encodings, key=encodings.__getitem__)
 
     common_tokens = sort[-take:]
@@ -262,14 +262,33 @@ def encoding_statistics(encodings, take=5):
     if seenZero:
         print("Saw character with value 0")
 
-def expand_data(content_frac = 0.5):
+def expand_data(content_frac = 0.5, seed = None):
     global content_examples
     global boilerplate_examples
     global data_blocks_encoded
 
-    content_sample_multpl = int((content_frac * boilerplate_examples) / (content_examples * (1 - content_frac)))
+    print("\nExpanding data set...")
 
-    #TODO: Multiply each content example. Maybe shuffle after?
+    content_sample_multpl = int(round((content_frac * boilerplate_examples) / (content_examples * (1 - content_frac))))
+
+    expanded_data = []
+    content_examples = 0
+    boilerplate_examples = 0
+
+    for d_block in data_blocks_encoded:
+        if d_block['label'][0] == 1.0:
+            for _ in xrange(content_sample_multpl):
+                expanded_data.append(d_block)
+                content_examples += 1
+        else:
+            expanded_data.append(d_block)
+            boilerplate_examples += 1
+
+    if seed is not None:
+        random.seed(seed)
+        random.shuffle(expanded_data)
+
+    data_blocks_encoded = expanded_data
 
 def get_batch(num_blocks, return_ids = False):
     global data_blocks_encoded
@@ -310,17 +329,25 @@ def reset_batches():
     global i_train_current
     i_train_current = 0
 
+def print_content_ratio():
+    global content_examples
+    global boilerplate_examples
+
+    print("\nContent examples: %d"%content_examples)
+    print("Boilerplate examples: %d"%boilerplate_examples)
+    print("%.2f%% content"%((float(content_examples)/(content_examples + boilerplate_examples)) * 100))
+
 verbose = True
 max_encoding = 255 + 1
 g_longest_block = 0
 g_max_block_length = 1000
 g_chop_blocks = True
 i_train_current = 0
-i_train_end = 50
+i_train_end = 0
 content_examples = None
 boilerplate_examples = None
-data_filtered = load_training_data(seed=1337)
 
+data_filtered = load_training_data(seed=1337)
 
 # print("Page ids:")
 # for d in data_filtered:
@@ -328,9 +355,11 @@ data_filtered = load_training_data(seed=1337)
 
 data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
 
-print("Content examples: %d"%content_examples)
-print("Boilerplate examples: %d"%boilerplate_examples)
-print("%.2f%% content"%((float(content_examples)/(content_examples + boilerplate_examples)) * 100))
+print_content_ratio()
+
+expand_data()
+
+print_content_ratio()
 
 # print("Block ids:")
 # for d in data_blocks_encoded:

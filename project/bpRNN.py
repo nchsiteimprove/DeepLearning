@@ -95,7 +95,7 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 50 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 100 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
@@ -103,7 +103,7 @@ x_sym = T.imatrix()
 y_sym = T.imatrix()
 xmask_sym = T.matrix()
 
-print("Vocabulary size: %d"%VOCABULARY)
+print("\nVocabulary size: %d"%VOCABULARY)
 
 # Define network layers
 # Embedding layers
@@ -115,7 +115,7 @@ l_emb.params[l_emb.W].remove('trainable')
 # Use dummy data to verify the shape of the embedding layer
 X, Y, Xmask = get_batch(3)
 
-print("X: %s"%str(X.shape))
+print("\nX: %s"%str(X.shape))
 # allow_input_downcast risks loss of data
 print(get_output(l_emb, inputs={l_in:x_sym}).eval({x_sym:X}).shape)
 
@@ -205,11 +205,11 @@ c_false_neg = (T.eq(y_sym, target) * T.neq(y_pred, target)).sum()
 c_total_examples = c_true_pos + c_true_neg + c_false_pos + c_false_neg
 c_positives = y_sym.sum()
 
-c_recall = c_true_pos / (c_true_pos + c_false_neg + 0.0001)
-c_precision = c_true_pos / (c_true_pos + c_false_pos + 0.0001)
-c_f1 = 2 * (c_precision * c_recall) / (c_precision + c_recall + 0.0001)
+# c_recall = c_true_pos / (c_true_pos + c_false_neg + 0.0001)
+# c_precision = c_true_pos / (c_true_pos + c_false_pos + 0.0001)
+# c_f1 = 2 * (c_precision * c_recall) / (c_precision + c_recall + 0.0001)
 
-cost = c_f1#mean_cost
+cost = mean_cost
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
@@ -222,7 +222,7 @@ all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 all_grads = [T.clip(g,-3,3) for g in T.grad(cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
-updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.9)
+updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.5)
 
 train_func = theano.function([x_sym, y_sym, xmask_sym], [cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
@@ -238,7 +238,7 @@ Xtest, Ytest, Xmask_test = get_batch(35000)
 
 # TRAINING
 BATCH_SIZE = 100
-val_interval = BATCH_SIZE*10
+val_interval = BATCH_SIZE*100
 samples_to_process = 240000
 
 
