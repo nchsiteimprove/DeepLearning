@@ -95,7 +95,7 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 100 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 5 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
@@ -213,11 +213,11 @@ cost = mean_cost
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
-# print "Trainable Model Parameters"
-# print "-"*40
-# for param in all_parameters:
-#     print param, param.get_value().shape
-# print "-"*40
+print "Trainable Model Parameters"
+print "-"*40
+for param in all_parameters:
+    print param, param.get_value().shape
+print "-"*40
 
 all_grads = [T.clip(g,-3,3) for g in T.grad(cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
@@ -231,15 +231,15 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, c_true
 reset_batches()
 # Generate validation data
 slice_size = 1000
-Xval, Yval, Xmask_val = get_batch(5000)
-Xtest, Ytest, Xmask_test = get_batch(35000)
+Xval, Yval, Xmask_val = get_batch(5)#000)
+Xtest, Ytest, Xmask_test = get_batch(35)#000)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 100
-val_interval = BATCH_SIZE*100
-samples_to_process = 240000
+BATCH_SIZE = 2
+val_interval = BATCH_SIZE*5
+samples_to_process = 240#000
 
 
 samples_processed = 0
@@ -332,6 +332,7 @@ try:
             accs_val += [val_acc]
 
             ## Make acc png
+            plt.clf()
             plt.plot(val_samples,accs_val, label='validation')
             plt.title('', fontsize=20)
             plt.grid('on')
@@ -340,7 +341,8 @@ try:
             plt.xlabel('Processed samples', fontsize=15)
             plt.title('', fontsize=20)
             plt.grid('on')
-            plt.savefig(output_folder + "acc.png")
+            plt.legend(loc='best')
+            plt.savefig(output_folder + "acc_.png")
 
             # plt.plot(val_samples,accs_val)
             # plt.ylabel('Validation Accuracy', fontsize=15)
@@ -383,14 +385,18 @@ except:
 
 # print(len(costs))
 # print((costs[0]))
+# Save the legend to the acc png
+# plt.legend(loc='best')
+# plt.savefig(output_folder + "acc.png")
 # Make train cost png
 plt.clf()
-plt.plot(train_samples,costs)
+plt.plot(train_samples,costs, label='cost')
 plt.ylabel('Train costs', fontsize=15)
 plt.xlabel('Processed samples', fontsize=15)
 plt.title('', fontsize=20)
 plt.grid('on')
-plt.savefig(output_folder + "cost_train.png")
+plt.legend(loc='best')
+plt.savefig(output_folder + "cost_train_.png")
 
 # print(len(accs_train))
 # print((accs_train[0]))

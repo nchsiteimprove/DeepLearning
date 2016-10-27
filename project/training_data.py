@@ -347,7 +347,7 @@ i_train_end = 0
 content_examples = None
 boilerplate_examples = None
 
-data_filtered = load_training_data(seed=1337)
+data_filtered = load_training_data(9, seed=1337)
 
 # print("Page ids:")
 # for d in data_filtered:
