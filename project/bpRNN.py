@@ -95,7 +95,7 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 5 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 100 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
@@ -222,7 +222,7 @@ print "-"*40
 all_grads = [T.clip(g,-3,3) for g in T.grad(cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
-updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.5)
+updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.05)
 
 train_func = theano.function([x_sym, y_sym, xmask_sym], [cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
@@ -231,15 +231,15 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, c_true
 reset_batches()
 # Generate validation data
 slice_size = 1000
-Xval, Yval, Xmask_val = get_batch(5)#000)
-Xtest, Ytest, Xmask_test = get_batch(35)#000)
+Xval, Yval, Xmask_val = get_batch(5000)
+Xtest, Ytest, Xmask_test = get_batch(35000)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 2
-val_interval = BATCH_SIZE*5
-samples_to_process = 240#000
+BATCH_SIZE = 100
+val_interval = BATCH_SIZE*100
+samples_to_process = 240000
 
 
 samples_processed = 0
