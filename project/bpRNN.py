@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from lasagne.nonlinearities import linear, tanh
 from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer, DropoutLayer
 # from decoder_attention import LSTMAttentionDecodeFeedbackLayer
-from training_data import get_batch, reset_batches, encodings, max_encoding, slice_list
+from training_data import get_batch, reset_batches, reset_train_batches, encodings, max_encoding, slice_list
 
 class RepeatLayer(lasagne.layers.Layer):
     def __init__(self, incoming, n, **kwargs):
@@ -146,11 +146,8 @@ print(get_output(l_gru_enc_bckwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).ev
 l_enc = ConcatLayer([l_gru_enc_frwrd, l_gru_enc_bckwrd], axis=-1)
 print(get_output(l_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_hid = DenseLayer(incoming=l_enc, num_units=NUM_UNITS_HID, nonlinearity=tanh)
-print(get_output(l_hid, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
-
-# l_slice = SliceLayer(l_enc, indices=-1, axis=1)
-# print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+l_slice = SliceLayer(l_enc, indices=-1, axis=1)
+print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ###### End of Encoder ######
 
@@ -165,15 +162,19 @@ print(get_output(l_hid, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X
 
 # l_dec = LSTMAttentionDecodeFeedbackLayer(incoming=l_enc, num_units=NUM_UNITS_DEC)
 
-l_reshape = lasagne.layers.ReshapeLayer(l_gru_dec, (-1, [2]))
-print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# l_reshape = lasagne.layers.ReshapeLayer(l_enc, (-1, [2]))
+# print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+
+l_hid = DenseLayer(incoming=l_slice, num_units=NUM_UNITS_HID, nonlinearity=tanh)
+print(get_output(l_hid, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ### TODO: Maybe Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes?
-l_softmax = DenseLayer(incoming=l_reshape, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
+l_softmax = DenseLayer(incoming=l_hid, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
 print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_out = lasagne.layers.ReshapeLayer(l_softmax, (x_sym.shape[0], -1, NUM_OUTPUTS))
-print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+l_out = l_softmax
+# l_out = lasagne.layers.ReshapeLayer(l_softmax, (x_sym.shape[0], -1, NUM_OUTPUTS))
+# print(get_output(l_out, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 print("")
 ###### End of Decoder ######
@@ -195,7 +196,7 @@ total_cost = T.nnet.categorical_crossentropy(reshaped, flattened)
 mean_cost = T.mean(total_cost)
 
 # Accuracy function
-y_pred = T.argmax(output_train, axis=-1)#, keepdims=True)
+y_pred = T.argmax(output_train, axis=-1, keepdims=True)
 eq = T.eq(y_pred, y_sym)
 acc = T.mean(eq)
 
@@ -217,11 +218,11 @@ cost = mean_cost
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
-print "Trainable Model Parameters"
-print "-"*40
-for param in all_parameters:
-    print param, param.get_value().shape
-print "-"*40
+# print "Trainable Model Parameters"
+# print "-"*40
+# for param in all_parameters:
+#     print param, param.get_value().shape
+# print "-"*40
 
 all_grads = [T.clip(g,-3,3) for g in T.grad(cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
@@ -234,16 +235,17 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, c_true
 
 reset_batches()
 # Generate validation data
-slice_size = 1000
-Xval, Yval, Xmask_val = get_batch(5000)
-Xtest, Ytest, Xmask_test = get_batch(35000)
+slice_size = 50
+Xval, Yval, Xmask_val = get_batch(50)
+Xtest, Ytest, Xmask_test = get_batch(50, store_train_index=True)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 100
+BATCH_SIZE = 40
 val_interval = BATCH_SIZE*10
 samples_to_process = 240000
+nr_epochs = 200
 
 
 samples_processed = 0
@@ -257,121 +259,132 @@ batch_durations = []
 plt.figure()
 verbose = True
 debug = False
-batch_count = 1
+
 print_timing = False
 try:
-    while samples_processed < samples_to_process:
-        t_start = time.time()
+    for i_epoch in range(nr_epochs):
+        samples_processed = 0
+        batch_count = 0
+        reset_train_batches()
+
         if verbose:
-            print("Batch %d"%batch_count)
-            batch_count += 1
-        if debug:
-            print("\tGetting batch")
-        x_, ys_, x_masks_ = \
-            get_batch(BATCH_SIZE)
-        # if len(ids_) == 1:
-        #     print(ids_[0])
-        # else:
-        #     print(len(ids_))
-        if x_ is None or len(x_) == 0:
-            break
-        if debug:
-            print("\tTraining batch")
-        batch_cost, batch_acc, batch_output, batch_y_pred, batch_eq, batch_total_cost = train_func(x_, ys_, x_masks_)
-        if debug:
-            print("Output:")
-            print(batch_output)
-            print("Labels:")
-            print(ys_)
-            print("Cost:")
-            print(batch_total_cost)
-            # print("Output shape:")
-            # print(batch_output.shape)
-            # print("Argmax shape:")
-            # print(batch_y_pred.shape)
-            # print("Eq shape:")
-            # print(batch_eq.shape)
+            print("Epoch %d"%i_epoch)
 
-        samples_processed += BATCH_SIZE
-
-        #validation data
-        # if verbose:
-        #     print("\tPossible validation")
-        #TODO: Collect samples and plot only when validating
-        if samples_processed - last_valid_samples > val_interval:
-            print_timing = True
-            last_valid_samples = samples_processed
-
-            ## Only track these here to get more readable graphs
-            costs += [batch_cost]
-            accs_train += [batch_acc]
-            train_samples += [samples_processed]
-
-            #print "validating"
+        while samples_processed < samples_to_process:
+            t_start = time.time()
             if verbose:
-                print("\tValidating network")
-            # val_accs, val_outputs = [], []
-            # Xval_slices = slice_list(Xval, slice_size)
-            # Yval_slices = slice_list(Yval, slice_size)
-            # Xmask_val_slices = slice_list(Xmask_val, slice_size)
-            # for Xval_slice, Yval_slice, Xmask_val_slice in zip(Xval_slices, Yval_slices, Xmask_val_slices):
-            #     val_acc_slice, val_output_slice = test_func(Xval_slice, Yval_slice, Xmask_val_slice)
-            #     val_accs += [val_acc_slice]
-            #     val_outputs += [val_output_slice]
-            # val_acc = np.mean(val_accs)
-            # val_output = np.mean(val_outputs)
+                print("Batch %d"%batch_count)
+                batch_count += 1
+            if debug:
+                print("\tGetting batch")
+            x_, ys_, x_masks_ = \
+                get_batch(BATCH_SIZE)
+            # if len(ids_) == 1:
+            #     print(ids_[0])
+            # else:
+            #     print(len(ids_))
+            if x_ is None or len(x_) == 0:
+                break
+            if debug:
+                print("\tTraining batch")
+            batch_cost, batch_acc, batch_output, batch_y_pred, batch_eq, batch_total_cost = train_func(x_, ys_, x_masks_)
 
-            val_acc, val_output, true_pos, true_neg, false_pos, false_neg, positive = test_network(Xval, Yval, Xmask_val, slice_size)
-
-            recall = calc_recall(true_pos, false_neg)
-            precision = calc_precision(true_pos, false_pos)
-            f1 = calc_f1(precision, recall)
-
-            # print(val_output)
             if verbose:
-                print("\tTrain Accuracy: %.2f%%"%(batch_acc*100))
-                print("\tValid Accuracy: %.2f%%"%(val_acc*100))
-                print("\tValid F1: %.2f%%"%(f1*100))
-            val_samples += [samples_processed]
-            accs_val += [val_acc]
+                print("\tTrain accuracy: %.2f%%"%(batch_acc * 100))
+            if debug:
+                # print("Output:")
+                # print(batch_output)
+                # print("Labels:")
+                # print(ys_)
+                print("Cost:")
+                print(batch_total_cost)
+                # print("Output shape:")
+                # print(batch_output.shape)
+                # print("Argmax shape:")
+                # print(batch_y_pred.shape)
+                # print("Eq shape:")
+                # print(batch_eq.shape)
 
-            ## Make acc png
-            plt.clf()
-            plt.plot(val_samples,accs_val, label='validation')
-            plt.title('', fontsize=20)
-            plt.grid('on')
-            plt.plot(train_samples,accs_train, label='train')
-            plt.ylabel('Accuracy', fontsize=15)
-            plt.xlabel('Processed samples', fontsize=15)
-            plt.title('', fontsize=20)
-            plt.grid('on')
-            plt.legend(loc='best')
-            plt.savefig(output_folder + "acc_.png")
+            samples_processed += BATCH_SIZE
 
-            # plt.plot(val_samples,accs_val)
-            # plt.ylabel('Validation Accuracy', fontsize=15)
-            # plt.xlabel('Processed samples', fontsize=15)
-            # plt.title('', fontsize=20)
-            # plt.grid('on')
-            # plt.savefig(output_folder + "acc_val.png")
-            # display.display(display.Image(filename="out.png"))
-            # display.clear_output(wait=True)
-        t_end = time.time()
-        t_dur = t_end - t_start
-        batch_durations.append(t_dur)
+            #validation data
+            # if verbose:
+            #     print("\tPossible validation")
+            #TODO: Collect samples and plot only when validating
+            if samples_processed - last_valid_samples > val_interval:
+                print_timing = True
+                last_valid_samples = samples_processed
 
-        if verbose and print_timing:
-            print_timing = False
-            t_spent = sum(batch_durations)
-            t_avg = t_spent / float(len(batch_durations))
+                ## Only track these here to get more readable graphs
+                costs += [batch_cost]
+                accs_train += [batch_acc]
+                train_samples += [samples_processed]
 
-            batches_left = (samples_to_process - samples_processed) / BATCH_SIZE
-            t_left = batches_left * t_avg
+                #print "validating"
+                if verbose:
+                    print("\tValidating network")
+                # val_accs, val_outputs = [], []
+                # Xval_slices = slice_list(Xval, slice_size)
+                # Yval_slices = slice_list(Yval, slice_size)
+                # Xmask_val_slices = slice_list(Xmask_val, slice_size)
+                # for Xval_slice, Yval_slice, Xmask_val_slice in zip(Xval_slices, Yval_slices, Xmask_val_slices):
+                #     val_acc_slice, val_output_slice = test_func(Xval_slice, Yval_slice, Xmask_val_slice)
+                #     val_accs += [val_acc_slice]
+                #     val_outputs += [val_output_slice]
+                # val_acc = np.mean(val_accs)
+                # val_output = np.mean(val_outputs)
 
-            t, form = timing_human_readable(t_spent)
-            print("\tTime spent: %.2f%s"%(t, form))
-            t, form = timing_human_readable(t_left)
-            print("\tEstimated time left: %.2f%s"%(t, form))
+                val_acc, val_output, true_pos, true_neg, false_pos, false_neg, positive = test_network(Xval, Yval, Xmask_val, slice_size)
+
+                recall = calc_recall(true_pos, false_neg)
+                precision = calc_precision(true_pos, false_pos)
+                f1 = calc_f1(precision, recall)
+
+                # print(val_output)
+                if verbose:
+                    # print("\tTrain Accuracy: %.2f%%"%(batch_acc*100))
+                    print("\tValid Accuracy: %.2f%%"%(val_acc*100))
+                    print("\tValid F1: %.2f%%"%(f1*100))
+                val_samples += [samples_processed]
+                accs_val += [val_acc]
+
+                ## Make acc png
+                plt.clf()
+                plt.plot(val_samples,accs_val, label='validation')
+                plt.title('', fontsize=20)
+                plt.grid('on')
+                plt.plot(train_samples,accs_train, label='train')
+                plt.ylabel('Accuracy', fontsize=15)
+                plt.xlabel('Processed samples', fontsize=15)
+                plt.title('', fontsize=20)
+                plt.grid('on')
+                plt.legend(loc='best')
+                plt.savefig(output_folder + "acc_.png")
+
+                # plt.plot(val_samples,accs_val)
+                # plt.ylabel('Validation Accuracy', fontsize=15)
+                # plt.xlabel('Processed samples', fontsize=15)
+                # plt.title('', fontsize=20)
+                # plt.grid('on')
+                # plt.savefig(output_folder + "acc_val.png")
+                # display.display(display.Image(filename="out.png"))
+                # display.clear_output(wait=True)
+            t_end = time.time()
+            t_dur = t_end - t_start
+            batch_durations.append(t_dur)
+
+            if verbose and print_timing:
+                print_timing = False
+                t_spent = sum(batch_durations)
+                t_batch_avg = t_spent / float(len(batch_durations))
+
+                batches_left = ((samples_to_process - samples_processed) / BATCH_SIZE) * (nr_epochs - i_epoch)
+                t_left = batches_left * t_batch_avg
+
+                t, form = timing_human_readable(t_spent)
+                print("\tTime spent: %.2f%s"%(t, form))
+                t, form = timing_human_readable(t_left)
+                print("\tEstimated time left: %.2f%s"%(t, form))
 
 except KeyboardInterrupt:
     pass
@@ -460,8 +473,8 @@ print("Accuracy: %.2f%%"%(test_acc*100))
 # print("Verified accuracy mean numpy: %.2f%%"%verified_acc_mean_np)
 
 print("True positives: %d"%true_pos)
-print("True negatives: %d"%true_neg)
 print("False positives: %d"%false_pos)
+print("True negatives: %d"%true_neg)
 print("False negatives: %d"%false_neg)
 print("of %d training examples"%len(test_output))
 print("with %d positive labels"%positive)

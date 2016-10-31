@@ -86,7 +86,7 @@ def print_raw_data_keys(raw_data):
             if inner_t is dict:
                 print("\t\t%s"%str(inner_sample.keys()))
 
-def convert_training_data_individual_blocks(data_filtered, encode=True, statistics=False):
+def convert_training_data_individual_blocks(data_filtered, encode=True, exclude_length=None, max_block_length=None, statistics=False):
     data_blocks = []
     encodings = {}
     longest_block = 0
@@ -98,9 +98,8 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     nr_blocks_orig = 0
     total_block_length_chop = 0
     nr_blocks_chop = 0
+    nr_excluded_blocks = 0
 
-    global g_chop_blocks
-    global g_max_block_length
     global verbose
     global max_encoding
 
@@ -136,6 +135,10 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
 
             if b_label is not None and len(b_html) > 0:
                 if encode:
+                    if exclude_length is not None and len(b_html) > exclude_length:
+                        nr_excluded_blocks += 1
+                        continue
+
                     codes = []
                     for char in b_html:
                         code = ord(char)
@@ -159,12 +162,12 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
                     block_id = example['id'] + '-' + str(block_count)
 
                     # Some blocks are very long, split them up
-                    if g_chop_blocks and len(codes) > g_max_block_length:
+                    if max_block_length is not None and len(codes) > max_block_length:
                         # print("Slicing blocks")
-                        nr_slices = math.ceil(len(codes) / float(g_max_block_length))
+                        nr_slices = math.ceil(len(codes) / float(max_block_length))
                         slice_size = len(codes) / int(nr_slices)
 
-                        if slice_size > g_max_block_length:
+                        if slice_size > max_block_length:
                             print("ARRG!!")
 
                         slices = slice_list(codes, slice_size)
@@ -225,10 +228,12 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, statisti
     global i_train_end
     i_train_end = len(data_blocks)
     if verbose:
+        if exclude_length is not None:
+            print("Excluded %d blocks"%nr_excluded_blocks)
         print("Generated %d training examples"%i_train_end)
         print("Average original block length: %d"%(total_block_length_orig/nr_blocks_orig))
-        if g_chop_blocks:
-            print("Chopped blocks to max length: %d"%g_max_block_length)
+        if max_block_length is not None:
+            print("Chopped blocks to max length: %d"%max_block_length)
             print("Average chopped block length: %d"%(total_block_length_chop/nr_blocks_chop))
     return data_blocks, encodings
 
@@ -262,12 +267,12 @@ def encoding_statistics(encodings, take=5):
     if seenZero:
         print("Saw character with value 0")
 
-def expand_data(content_frac = 0.5, seed = None):
+def oversample_data(content_frac = 0.5, seed = None):
     global content_examples
     global boilerplate_examples
     global data_blocks_encoded
 
-    print("\nExpanding data set...")
+    print("\nOversampling data set...")
 
     content_sample_multpl = int(round((content_frac * boilerplate_examples) / (content_examples * (1 - content_frac))))
 
@@ -290,14 +295,79 @@ def expand_data(content_frac = 0.5, seed = None):
 
     data_blocks_encoded = expanded_data
 
-def get_batch(num_blocks, return_ids = False):
+    global i_train_end
+    i_train_end = len(data_blocks_encoded)
+
+def undersample_data(content_frac = 0.5, seed = None):
+    global content_examples
+    global boilerplate_examples
+    global data_blocks_encoded
+
+    print("\nUndersampling data set...")
+
+    undersampled_data = []
+    content_examples = 0
+    boilerplate_examples = 0
+
+    for d_block in data_blocks_encoded:
+        if d_block['label'][0] == 1.0:
+            undersampled_data.append(d_block)
+            content_examples += 1
+
+        elif content_examples == 0 or float(content_examples)/(content_examples+boilerplate_examples) >= content_frac:
+            undersampled_data.append(d_block)
+            boilerplate_examples += 1
+
+    if seed is not None:
+        random.seed(seed)
+        random.shuffle(undersampled_data)
+
+    data_blocks_encoded = undersampled_data
+
+    global i_train_end
+    i_train_end = len(data_blocks_encoded)
+
+def cut_data(nr_content, nr_boilerplate, seed = None):
+    global content_examples
+    global boilerplate_examples
+    global data_blocks_encoded
+
+    print("\nCutting data...")
+
+    cut_data = []
+    content_examples = 0
+    boilerplate_examples = 0
+
+    if seed is not None:
+        random.seed(seed)
+        random.shuffle(data_blocks_encoded)
+
+    for d_block in data_blocks_encoded:
+        if d_block['label'][0] == 1.0 and content_examples < nr_content:
+            cut_data.append(d_block)
+            content_examples += 1
+
+        if d_block['label'][0] == 0.0 and boilerplate_examples < nr_boilerplate:
+            cut_data.append(d_block)
+            boilerplate_examples += 1
+
+    data_blocks_encoded = cut_data
+
+    global i_train_end
+    i_train_end = len(data_blocks_encoded)
+
+def get_batch(num_blocks, store_train_index = False, return_ids = False):
     global data_blocks_encoded
     global g_longest_block
+    global i_train_start
     global i_train_end
     global i_train_current
     global verbose
 
     take = i_train_current + num_blocks
+
+    if store_train_index:
+        i_train_start = take
 
     batch_size = min(num_blocks, i_train_end - i_train_current)
 
@@ -329,6 +399,16 @@ def reset_batches():
     global i_train_current
     i_train_current = 0
 
+def reset_train_batches():
+    global i_train_current
+    global i_train_start
+    i_train_current = i_train_start
+
+def get_nr_training_examples():
+    global content_examples
+    global boilerplate_examples
+    return content_examples + boilerplate_examples
+
 def print_content_ratio():
     global content_examples
     global boilerplate_examples
@@ -340,9 +420,8 @@ def print_content_ratio():
 verbose = True
 max_encoding = 255 + 1
 g_longest_block = 0
-g_max_block_length = 1000
-g_chop_blocks = True
 i_train_current = 0
+i_train_start = 0
 i_train_end = 0
 content_examples = None
 boilerplate_examples = None
@@ -353,11 +432,13 @@ data_filtered = load_training_data(seed=133742)
 # for d in data_filtered:
     # print(d['id'])
 
-data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, statistics=True)
+data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, exclude_length=1000, statistics=True)
 
 print_content_ratio()
 
-expand_data()
+# oversample_data()
+# undersample_data()
+cut_data(nr_content=200, nr_boilerplate=200, seed=1337)
 
 print_content_ratio()
 
