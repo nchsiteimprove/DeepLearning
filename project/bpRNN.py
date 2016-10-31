@@ -7,7 +7,7 @@ import matplotlib
 # from IPython import display
 import numpy as np
 import matplotlib.pyplot as plt
-from lasagne.nonlinearities import linear
+from lasagne.nonlinearities import linear, tanh
 from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer, DropoutLayer
 # from decoder_attention import LSTMAttentionDecodeFeedbackLayer
 from training_data import get_batch, reset_batches, encodings, max_encoding, slice_list
@@ -95,8 +95,9 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 100 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 50 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
+NUM_UNITS_HID = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
 # Symbolic Theano variables
 x_sym = T.imatrix()
@@ -125,7 +126,7 @@ l_mask_enc = InputLayer(shape=(None, None))
 l_gru_enc_frwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc)
 print(get_output(l_gru_enc_frwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_enc_frwrd_dropout = DropoutLayer(incoming=l_gru_enc_frwrd)
+# l_enc_frwrd_dropout = DropoutLayer(incoming=l_gru_enc_frwrd)
 
 # l_gru_enc_frwrd2 = GRULayer(incoming=l_enc_frwrd_dropout, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc)
 # print(get_output(l_gru_enc_frwrd2, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
@@ -135,36 +136,39 @@ l_enc_frwrd_dropout = DropoutLayer(incoming=l_gru_enc_frwrd)
 l_gru_enc_bckwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc, backwards=True)
 print(get_output(l_gru_enc_bckwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_enc_bcwrd_dropout = DropoutLayer(incoming=l_gru_enc_bckwrd)
+# l_enc_bcwrd_dropout = DropoutLayer(incoming=l_gru_enc_bckwrd)
 
 # l_gru_enc_bckwrd2 = GRULayer(incoming=l_enc_bcwrd_dropout, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc, backwards=True)
 # print(get_output(l_gru_enc_bckwrd2, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 #
 # l_enc_bcwrd_dropout2 = DropoutLayer(incoming=l_gru_enc_bckwrd2)
 
-l_enc = ConcatLayer([l_enc_frwrd_dropout, l_enc_bcwrd_dropout], axis=-1)
+l_enc = ConcatLayer([l_gru_enc_frwrd, l_gru_enc_bckwrd], axis=-1)
 print(get_output(l_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-l_slice = SliceLayer(l_enc, indices=-1, axis=1)
-print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+l_hid = DenseLayer(incoming=l_enc, num_units=NUM_UNITS_HID, nonlinearity=tanh)
+print(get_output(l_hid, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+
+# l_slice = SliceLayer(l_enc, indices=-1, axis=1)
+# print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ###### End of Encoder ######
 
 ###### Start of Decoder ######
-l_in_rep = RepeatLayer(l_slice, n=MAX_OUT_LABELS)
-print("Repeat layer")
-print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
-    {x_sym: X, xmask_sym: Xmask}).shape
-
-l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
-print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# l_in_rep = RepeatLayer(l_slice, n=MAX_OUT_LABELS)
+# print("Repeat layer")
+# print lasagne.layers.get_output(l_in_rep, inputs={l_in: x_sym, l_mask_enc: xmask_sym}).eval(
+#     {x_sym: X, xmask_sym: Xmask}).shape
+#
+# l_gru_dec = GRULayer(incoming=l_in_rep, num_units=NUM_UNITS_DEC)
+# print(get_output(l_gru_dec, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 # l_dec = LSTMAttentionDecodeFeedbackLayer(incoming=l_enc, num_units=NUM_UNITS_DEC)
 
 l_reshape = lasagne.layers.ReshapeLayer(l_gru_dec, (-1, [2]))
 print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
-### TODO: Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes?
+### TODO: Maybe Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes?
 l_softmax = DenseLayer(incoming=l_reshape, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
 print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
@@ -238,7 +242,7 @@ Xtest, Ytest, Xmask_test = get_batch(35000)
 
 # TRAINING
 BATCH_SIZE = 100
-val_interval = BATCH_SIZE*100
+val_interval = BATCH_SIZE*10
 samples_to_process = 240000
 
 
