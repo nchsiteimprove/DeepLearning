@@ -86,7 +86,7 @@ def print_raw_data_keys(raw_data):
             if inner_t is dict:
                 print("\t\t%s"%str(inner_sample.keys()))
 
-def convert_training_data_individual_blocks(data_filtered, encode=True, exclude_length=None, max_block_length=None, statistics=False):
+def convert_training_data_individual_blocks(data_filtered, encode=True, exclude_length_max=None, exclude_length_min=None, max_block_length=None, statistics=False):
     data_blocks = []
     encodings = {}
     longest_block = 0
@@ -135,7 +135,7 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, exclude_
 
             if b_label is not None and len(b_html) > 0:
                 if encode:
-                    if exclude_length is not None and len(b_html) > exclude_length:
+                    if (exclude_length_max is not None and len(b_html) > exclude_length_max) or (exclude_length_min is not None and len(b_html) < exclude_length_min):
                         nr_excluded_blocks += 1
                         continue
 
@@ -228,7 +228,7 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, exclude_
     global i_train_end
     i_train_end = len(data_blocks)
     if verbose:
-        if exclude_length is not None:
+        if (exclude_length_max is not None) or (exclude_length_min is not None):
             print("Excluded %d blocks"%nr_excluded_blocks)
         print("Generated %d training examples"%i_train_end)
         print("Average original block length: %d"%(total_block_length_orig/nr_blocks_orig))
@@ -432,13 +432,13 @@ data_filtered = load_training_data(seed=133742)
 # for d in data_filtered:
     # print(d['id'])
 
-data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, exclude_length=1000, statistics=True)
+data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_filtered, encode=True, exclude_length_max=400, exclude_length_min=50, statistics=True)
 
 print_content_ratio()
 
 # oversample_data()
 # undersample_data()
-cut_data(nr_content=200, nr_boilerplate=200, seed=1337)
+cut_data(nr_content=150, nr_boilerplate=150, seed=1337)
 
 print_content_ratio()
 

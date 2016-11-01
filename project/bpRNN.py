@@ -95,7 +95,7 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 50 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 100 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 NUM_UNITS_HID = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
@@ -227,7 +227,7 @@ all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 all_grads = [T.clip(g,-3,3) for g in T.grad(cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
 
-updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=0.05)
+updates = lasagne.updates.adagrad(all_grads, all_parameters, learning_rate=0.05)
 
 train_func = theano.function([x_sym, y_sym, xmask_sym], [cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
@@ -243,7 +243,7 @@ Xtest, Ytest, Xmask_test = get_batch(50, store_train_index=True)
 
 # TRAINING
 BATCH_SIZE = 40
-val_interval = BATCH_SIZE*10
+val_interval = BATCH_SIZE*4
 samples_to_process = 240000
 nr_epochs = 200
 
@@ -264,6 +264,7 @@ print_timing = False
 try:
     for i_epoch in range(nr_epochs):
         samples_processed = 0
+        last_valid_samples = 0
         batch_count = 0
         reset_train_batches()
 
