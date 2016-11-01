@@ -1,0 +1,7 @@
+Cut data to 150 examples of each type, seed 1337, small network. Got convergence in epoch 33-39.
+At 200 examples of each it converged at around epoch 47-55.
+Used f1 + categorical_crossentropy fancy cost
+
+
+Using just categorical_crossentropy the network converges around epoch 74 for 200 examples.
+converges around epoch 47 for 150 examples

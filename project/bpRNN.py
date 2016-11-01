@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from lasagne.nonlinearities import linear, tanh
 from lasagne.layers import InputLayer, GRULayer, DenseLayer, EmbeddingLayer, get_output, ReshapeLayer, SliceLayer, ConcatLayer, DropoutLayer
 # from decoder_attention import LSTMAttentionDecodeFeedbackLayer
-from training_data import get_batch, reset_batches, reset_train_batches, encodings, max_encoding, slice_list
+from training_data import get_batch, reset_batches, reset_train_batches, encodings, max_encoding, slice_list, get_nr_samples_to_process
 
 class RepeatLayer(lasagne.layers.Layer):
     def __init__(self, incoming, n, **kwargs):
@@ -246,9 +246,8 @@ Xtest, Ytest, Xmask_test = get_batch(50, store_train_index=True)
 # TRAINING
 BATCH_SIZE = 10
 val_interval = BATCH_SIZE*10
-samples_to_process = 240000
-nr_epochs = 200
-
+samples_to_process = get_nr_samples_to_process()
+nr_epochs = 500
 
 samples_processed = 0
 last_valid_samples = 0
@@ -261,6 +260,12 @@ batch_durations = []
 plt.figure()
 verbose = True
 debug = False
+
+converge_after = 20
+converge_batch = -1
+converge_epoch = -1
+converge_value = -1
+converge_steps = 0
 
 print_timing = False
 try:
@@ -296,6 +301,23 @@ try:
             if debug:
                 print("\tTraining batch")
             batch_cost, batch_acc, batch_output, batch_y_pred, batch_eq, batch_total_cost = train_func(x_, ys_, x_masks_)
+
+            ### Converge check start
+            converge_on = batch_acc
+            if converge_on != converge_value:
+                converge_epoch = i_epoch
+                converge_batch = batch_count
+                converge_value = converge_on
+                converge_steps = 0
+
+            else:
+                converge_steps += 1
+
+            if converge_steps >= converge_after:
+                if verbose:
+                    print("\t\t\t\tNetwork has converged!")
+
+            ### Converge check end
 
             if verbose:
                 print("\tTrain accuracy: %.2f%%"%(batch_acc * 100))
@@ -433,7 +455,10 @@ plt.savefig(output_folder + "cost_train_.png")
 # plt.grid('on')
 # plt.savefig(output_folder + "acc_train.png")
 
-print("Training done, calculating final result...")
+if converge_steps >= converge_after:
+    print("\nNetwork converged at epoch %d, batch %d"%(converge_epoch, converge_batch))
+
+print("\nTraining done, calculating final result...")
 t_start = time.time()
 test_acc, test_output, true_pos, true_neg, false_pos, false_neg, positive = test_network(Xtest, Ytest, Xmask_test, slice_size)
 
