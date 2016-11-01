@@ -95,7 +95,7 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 100 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 20 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 NUM_UNITS_HID = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
@@ -210,11 +210,13 @@ c_false_neg = (T.eq(y_sym, target) * T.neq(y_pred, target)).sum()
 c_total_examples = c_true_pos + c_true_neg + c_false_pos + c_false_neg
 c_positives = y_sym.sum()
 
-# c_recall = c_true_pos / (c_true_pos + c_false_neg + 0.0001)
-# c_precision = c_true_pos / (c_true_pos + c_false_pos + 0.0001)
-# c_f1 = 2 * (c_precision * c_recall) / (c_precision + c_recall + 0.0001)
+c_recall = c_true_pos / (c_true_pos + c_false_neg + 0.0001)
+c_precision = c_true_pos / (c_true_pos + c_false_pos + 0.0001)
+c_f1 = 2 * (c_precision * c_recall) / (c_precision + c_recall + 0.0001)
 
-cost = mean_cost
+f1_cost = (1 - c_f1)
+
+cost = f1_cost + (mean_cost / 10000)
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
@@ -226,8 +228,8 @@ all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
 all_grads = [T.clip(g,-3,3) for g in T.grad(cost, all_parameters)]
 all_grads = lasagne.updates.total_norm_constraint(all_grads,3)
-
-updates = lasagne.updates.adagrad(all_grads, all_parameters, learning_rate=0.05)
+learning_rate=0.01
+updates = lasagne.updates.adam(all_grads, all_parameters, learning_rate=learning_rate)
 
 train_func = theano.function([x_sym, y_sym, xmask_sym], [cost, acc, output_train, y_pred, eq, total_cost], updates=updates)
 
@@ -242,8 +244,8 @@ Xtest, Ytest, Xmask_test = get_batch(50, store_train_index=True)
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 40
-val_interval = BATCH_SIZE*4
+BATCH_SIZE = 10
+val_interval = BATCH_SIZE*10
 samples_to_process = 240000
 nr_epochs = 200
 
@@ -267,6 +269,11 @@ try:
         last_valid_samples = 0
         batch_count = 0
         reset_train_batches()
+
+        # if i_epoch != 0 and i_epoch % 3 == 0:
+        #     if debug:
+        #         print("Decreasing learning rate")
+        #     learning_rate /= 2
 
         if verbose:
             print("Epoch %d"%i_epoch)
@@ -293,8 +300,8 @@ try:
             if verbose:
                 print("\tTrain accuracy: %.2f%%"%(batch_acc * 100))
             if debug:
-                # print("Output:")
-                # print(batch_output)
+                print("Output:")
+                print(batch_output)
                 # print("Labels:")
                 # print(ys_)
                 print("Cost:")
