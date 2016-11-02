@@ -118,13 +118,13 @@ X, Y, Xmask = get_batch(3)
 
 print("\nX: %s"%str(X.shape))
 # allow_input_downcast risks loss of data
-print(get_output(l_emb, inputs={l_in:x_sym}).eval({x_sym:X}).shape)
+# print(get_output(l_emb, inputs={l_in:x_sym}).eval({x_sym:X}).shape)
 
 ###### Start of Encoder ######
 l_mask_enc = InputLayer(shape=(None, None))
 
 l_gru_enc_frwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc)
-print(get_output(l_gru_enc_frwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# print(get_output(l_gru_enc_frwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 # l_enc_frwrd_dropout = DropoutLayer(incoming=l_gru_enc_frwrd)
 
@@ -134,7 +134,7 @@ print(get_output(l_gru_enc_frwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eva
 # l_enc_frwrd_dropout2 = DropoutLayer(incoming=l_gru_enc_frwrd2)
 
 l_gru_enc_bckwrd = GRULayer(incoming=l_emb, num_units=NUM_UNITS_ENC, mask_input=l_mask_enc, backwards=True)
-print(get_output(l_gru_enc_bckwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# print(get_output(l_gru_enc_bckwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 # l_enc_bcwrd_dropout = DropoutLayer(incoming=l_gru_enc_bckwrd)
 
@@ -144,10 +144,10 @@ print(get_output(l_gru_enc_bckwrd, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).ev
 # l_enc_bcwrd_dropout2 = DropoutLayer(incoming=l_gru_enc_bckwrd2)
 
 l_enc = ConcatLayer([l_gru_enc_frwrd, l_gru_enc_bckwrd], axis=-1)
-print(get_output(l_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# print(get_output(l_enc, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 l_slice = SliceLayer(l_enc, indices=-1, axis=1)
-print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ###### End of Encoder ######
 
@@ -166,11 +166,11 @@ print(get_output(l_slice, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym
 # print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 l_hid = DenseLayer(incoming=l_slice, num_units=NUM_UNITS_HID, nonlinearity=tanh)
-print(get_output(l_hid, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# print(get_output(l_hid, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ### TODO: Maybe Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes?
 l_softmax = DenseLayer(incoming=l_hid, num_units=NUM_OUTPUTS, nonlinearity=T.nnet.softmax)
-print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
+# print(get_output(l_softmax, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 l_out = l_softmax
 # l_out = lasagne.layers.ReshapeLayer(l_softmax, (x_sym.shape[0], -1, NUM_OUTPUTS))
@@ -379,17 +379,17 @@ try:
                 accs_val += [val_acc]
 
                 ## Make acc png
-                plt.clf()
-                plt.plot(val_samples,accs_val, label='validation')
-                plt.title('', fontsize=20)
-                plt.grid('on')
-                plt.plot(train_samples,accs_train, label='train')
-                plt.ylabel('Accuracy', fontsize=15)
-                plt.xlabel('Processed samples', fontsize=15)
-                plt.title('', fontsize=20)
-                plt.grid('on')
-                plt.legend(loc='best')
-                plt.savefig(output_folder + "acc_.png")
+                # plt.clf()
+                # plt.plot(val_samples,accs_val, label='validation')
+                # plt.title('', fontsize=20)
+                # plt.grid('on')
+                # plt.plot(train_samples,accs_train, label='train')
+                # plt.ylabel('Accuracy', fontsize=15)
+                # plt.xlabel('Processed samples', fontsize=15)
+                # plt.title('', fontsize=20)
+                # plt.grid('on')
+                # plt.legend(loc='best')
+                # plt.savefig(output_folder + "acc_.png")
 
                 # plt.plot(val_samples,accs_val)
                 # plt.ylabel('Validation Accuracy', fontsize=15)
@@ -436,14 +436,14 @@ except:
 # plt.legend(loc='best')
 # plt.savefig(output_folder + "acc.png")
 # Make train cost png
-plt.clf()
-plt.plot(train_samples,costs, label='cost')
-plt.ylabel('Train costs', fontsize=15)
-plt.xlabel('Processed samples', fontsize=15)
-plt.title('', fontsize=20)
-plt.grid('on')
-plt.legend(loc='best')
-plt.savefig(output_folder + "cost_train_.png")
+# plt.clf()
+# plt.plot(train_samples,costs, label='cost')
+# plt.ylabel('Train costs', fontsize=15)
+# plt.xlabel('Processed samples', fontsize=15)
+# plt.title('', fontsize=20)
+# plt.grid('on')
+# plt.legend(loc='best')
+# plt.savefig(output_folder + "cost_train_.png")
 
 # print(len(accs_train))
 # print((accs_train[0]))
