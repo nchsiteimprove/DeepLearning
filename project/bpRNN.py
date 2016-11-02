@@ -95,7 +95,7 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 20 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 60 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 NUM_UNITS_HID = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
@@ -244,8 +244,8 @@ Xtest, Ytest, Xmask_test = get_batch(50, store_train_index=True)
 # print "Yval", Yval.shape
 
 # TRAINING
-BATCH_SIZE = 10
-val_interval = BATCH_SIZE*10
+BATCH_SIZE = 40
+val_interval = BATCH_SIZE*9
 samples_to_process = get_nr_samples_to_process()
 nr_epochs = 500
 
@@ -275,10 +275,10 @@ try:
         batch_count = 0
         reset_train_batches()
 
-        # if i_epoch != 0 and i_epoch % 3 == 0:
-        #     if debug:
-        #         print("Decreasing learning rate")
-        #     learning_rate /= 2
+        if i_epoch != 0 and i_epoch % 10 == 0:
+            if verbose:
+                print("Decreasing learning rate")
+            learning_rate /= 2.0
 
         if verbose:
             print("Epoch %d"%i_epoch)

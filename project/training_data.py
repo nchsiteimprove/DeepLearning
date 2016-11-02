@@ -441,7 +441,7 @@ print_content_ratio()
 
 # oversample_data()
 # undersample_data()
-cut_data(nr_content=150 nr_boilerplate=150, seed=1337)
+cut_data(nr_content=150, nr_boilerplate=150, seed=1337)
 
 print_content_ratio()
 

@@ -5,3 +5,20 @@ Used f1 + categorical_crossentropy fancy cost
 
 Using just categorical_crossentropy the network converges around epoch 74 for 200 examples.
 converges around epoch 47 for 150 examples
+
+used learning rate 0.05
+
+
+02-11-2016
+Now seeing small network converge around epoch 28-29 with learning rate 0.01, 150 examples
+
+Increasing batch size makes convergence (of train acc) happen later
+
+now using batch size 20
+
+now halving learning rate every 10 epochs. convergence improved from ~49 to ~32-40
+
+increased network size to 30
+increased network size to 40 (converged at epoch 36)
+increased network size to 50 (converged at epoch 27)
+increased network size to 60 (converged at epoch 35)
