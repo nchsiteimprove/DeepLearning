@@ -22,3 +22,15 @@ increased network size to 30
 increased network size to 40 (converged at epoch 36)
 increased network size to 50 (converged at epoch 27)
 increased network size to 60 (converged at epoch 35)
+
+
+07-11-2016
+Increased test size to 150 blocks, training data to 250 each type to compensate.
+
+reduce learning rate by 1.5 every 10 epochs
+
+large network of 100 units
+
+converges around epoch 86-101
+
+Changed the encoding style to use the most frequent chars instead of ascii. Network now converges around epoch 53

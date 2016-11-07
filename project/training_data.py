@@ -86,6 +86,29 @@ def print_raw_data_keys(raw_data):
             if inner_t is dict:
                 print("\t\t%s"%str(inner_sample.keys()))
 
+def get_valid_chars(data_filtered):
+    global max_encoding
+
+    chars_count = {}
+
+    for example in data_filtered:
+        html = example['html']
+        for char in html:
+            if char in chars_count:
+                chars_count[char] += 1
+            else:
+                chars_count[char] = 1
+
+    frequent_chars = sorted([(count, char) for char, count in chars_count.items()], reverse=True)[:max_encoding]
+
+    valid_chars = {}
+    global code_to_char
+    for idx, (_, char) in enumerate(frequent_chars):
+        valid_chars[char] = idx
+        code_to_char[idx] = char
+
+    return valid_chars
+
 def convert_training_data_individual_blocks(data_filtered, encode=True, exclude_length_max=None, exclude_length_min=None, max_block_length=None, statistics=False):
     data_blocks = []
     encodings = {}
@@ -101,14 +124,14 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, exclude_
     nr_excluded_blocks = 0
 
     global verbose
-    global max_encoding
 
     global content_examples
     global boilerplate_examples
     content_examples = 0
     boilerplate_examples = 0
 
-    code_max = max_encoding - 1
+    valid_chars = get_valid_chars(data_filtered)
+    code_max = len(valid_chars)
 
     if encode:
         print("\nEncoding training data...")
@@ -141,10 +164,10 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, exclude_
 
                     codes = []
                     for char in b_html:
-                        code = ord(char)
-
-                        if code_max is not None and code > code_max:
-                            code = code_max + 1
+                        if char in valid_chars:
+                            code = valid_chars[char]
+                        else:
+                            code = code_max
 
                         codes.append(code)
                         if code not in encodings:
@@ -238,34 +261,28 @@ def convert_training_data_individual_blocks(data_filtered, encode=True, exclude_
     return data_blocks, encodings
 
 def encoding_statistics(encodings, take=5):
+    global code_to_char
+
     print("\nEncoded %d tokens"%len(encodings))
     sort = sorted(encodings, key=encodings.__getitem__)
 
     common_tokens = sort[-take:]
     print("Most common tokens:")
     for token in common_tokens[::-1]:
-        print("%s: %d"%(unichr(token), encodings[token]))
+        if token < len(code_to_char):
+            char = code_to_char[token]
+        else:
+            char = 'unknown'
+        print("%s: %d"%(char, encodings[token]))
 
     least_common_tokens = sort[:take]
     print("Least common tokens:")
     for token in least_common_tokens:
-        print("%s: %d"%(unichr(token), encodings[token]))
-
-    ascii_max = 255
-    max_c = 0
-    max_t = ''
-    seenZero = False
-    for token, count in encodings.items():
-        if token == 0:
-            seenZero = True
-
-        if token > ascii_max and count > max_c:
-            max_c = count
-            max_t = token
-
-    print("Most common non-ascii character: %s, count: %d"%(unichr(max_t), max_c))
-    if seenZero:
-        print("Saw character with value 0")
+        if token < len(code_to_char):
+            char = code_to_char[token]
+        else:
+            char = 'unknown'
+        print("%s: %d"%(char, encodings[token]))
 
 def oversample_data(content_frac = 0.5, seed = None):
     global content_examples
@@ -421,13 +438,14 @@ def print_content_ratio():
     print("%.2f%% content"%((float(content_examples)/(content_examples + boilerplate_examples)) * 100))
 
 verbose = True
-max_encoding = 255 + 1
+max_encoding = 200
 g_longest_block = 0
 i_train_current = 0
 i_train_start = 0
 i_train_end = 0
 content_examples = None
 boilerplate_examples = None
+code_to_char = {}
 
 data_filtered = load_training_data(seed=133742)
 
