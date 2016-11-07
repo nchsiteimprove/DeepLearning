@@ -458,8 +458,8 @@ data_blocks_encoded, encodings = convert_training_data_individual_blocks(data_fi
 print_content_ratio()
 
 # oversample_data()
-# undersample_data()
-cut_data(nr_content=250, nr_boilerplate=250, seed=1337)
+undersample_data(seed=1337)
+# cut_data(nr_content=250, nr_boilerplate=250, seed=1337)
 
 print_content_ratio()
 

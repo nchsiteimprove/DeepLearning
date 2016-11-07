@@ -33,4 +33,34 @@ large network of 100 units
 
 converges around epoch 86-101
 
-Changed the encoding style to use the most frequent chars instead of ascii. Network now converges around epoch 53
+Changed the encoding style to use the most frequent chars instead of ascii. Network now converges around epoch 53-56s
+
+adding another dense layer network converges around epoch 66, removing layer again for now
+
+going up to 300 training examples of each type, converging around epoch >173
+
+going back to 250 training examples of each type and changing cost function from
+  cost = f1_cost + (mean_cost / 10000)
+to
+  cost = f1_cost + (mean_cost / 1000)
+
+converges around epoch 55
+
+Change cost function again
+from
+cost = f1_cost + (mean_cost / 1000)
+to
+cost = f1_cost + (mean_cost / 100)
+
+converges around epoch 57
+
+Change cost function again
+from
+cost = f1_cost + (mean_cost / 100)
+to
+cost = f1_cost + (mean_cost / 100000)
+
+converges around epoch 61
+
+going back to
+  cost = f1_cost + (mean_cost / 10000)

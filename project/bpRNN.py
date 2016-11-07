@@ -166,6 +166,7 @@ l_slice = SliceLayer(l_enc, indices=-1, axis=1)
 # print(get_output(l_reshape, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 l_hid = DenseLayer(incoming=l_slice, num_units=NUM_UNITS_HID, nonlinearity=tanh)
+# l_hid2 = DenseLayer(incoming=l_hid, num_units=NUM_UNITS_HID, nonlinearity=tanh)
 # print(get_output(l_hid, inputs={l_in:x_sym, l_mask_enc:xmask_sym}).eval({x_sym:X, xmask_sym:Xmask}).shape)
 
 ### TODO: Maybe Exchange softmax for a sigmoid layer, as that is sufficient to describe our two classes?
