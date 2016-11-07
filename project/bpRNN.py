@@ -217,7 +217,7 @@ c_f1 = 2 * (c_precision * c_recall) / (c_precision + c_recall + 0.0001)
 
 f1_cost = (1 - c_f1)
 
-cost = f1_cost + (mean_cost / 10000)
+cost = mean_cost#f1_cost + (mean_cost / 10000)
 
 all_parameters = lasagne.layers.get_all_params([l_out], trainable=True)
 
@@ -239,14 +239,14 @@ test_func = theano.function([x_sym, y_sym, xmask_sym], [acc, output_test, c_true
 reset_batches()
 # Generate validation data
 slice_size = 50
-Xval, Yval, Xmask_val = get_batch(50)
-Xtest, Ytest, Xmask_test = get_batch(150, store_train_index=True)
+Xval, Yval, Xmask_val = get_batch(200)
+Xtest, Ytest, Xmask_test = get_batch(1500, store_train_index=True)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
 BATCH_SIZE = 40
-val_interval = BATCH_SIZE*5
+val_interval = BATCH_SIZE*20
 samples_to_process = get_nr_samples_to_process()
 nr_epochs = 200
 
