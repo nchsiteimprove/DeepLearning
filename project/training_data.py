@@ -23,7 +23,7 @@ def discard_example(training_example):
     return len(bad) > 0
 
 def slice_list(orig_list, slice_size):
-    return [orig_list[i:i + slice_size] for i in xrange(0, len(orig_list), slice_size)]
+    return [orig_list[i:i + slice_size] for i in range(0, len(orig_list), slice_size)]
 
 def load_training_data(n_examples=None, seed=None):
     got_data()
@@ -441,7 +441,7 @@ print_content_ratio()
 
 # oversample_data()
 # undersample_data()
-cut_data(nr_content=150, nr_boilerplate=150, seed=1337)
+cut_data(nr_content=250, nr_boilerplate=250, seed=1337)
 
 print_content_ratio()
 

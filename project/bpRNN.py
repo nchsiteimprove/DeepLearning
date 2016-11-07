@@ -95,7 +95,7 @@ def calc_f1(precision, recall):
 # Variables
 NUM_OUTPUTS = 2
 VOCABULARY = max_encoding + 1#len(encodings)
-NUM_UNITS_ENC = 60 #TODO: Larger networks? Play around with hyper-parameters
+NUM_UNITS_ENC = 100 #TODO: Larger networks? Play around with hyper-parameters
 NUM_UNITS_DEC = NUM_UNITS_ENC
 NUM_UNITS_HID = NUM_UNITS_ENC
 MAX_OUT_LABELS = 1
@@ -239,15 +239,18 @@ reset_batches()
 # Generate validation data
 slice_size = 50
 Xval, Yval, Xmask_val = get_batch(50)
-Xtest, Ytest, Xmask_test = get_batch(50, store_train_index=True)
+Xtest, Ytest, Xmask_test = get_batch(150, store_train_index=True)
 # print "Xval", Xval.shape
 # print "Yval", Yval.shape
 
 # TRAINING
 BATCH_SIZE = 40
-val_interval = BATCH_SIZE*9
+val_interval = BATCH_SIZE*5
 samples_to_process = get_nr_samples_to_process()
-nr_epochs = 500
+nr_epochs = 200
+
+reduce_learning_rate_n_epochs = 10
+reduce_learning_rate_factor = 1.5
 
 samples_processed = 0
 last_valid_samples = 0
@@ -257,7 +260,7 @@ output_folder = "output/"
 val_samples, train_samples = [], []
 costs, accs_val, accs_train = [], [], []
 batch_durations = []
-plt.figure()
+# plt.figure()
 verbose = True
 debug = False
 
@@ -275,10 +278,10 @@ try:
         batch_count = 0
         reset_train_batches()
 
-        if i_epoch != 0 and i_epoch % 10 == 0:
+        if i_epoch != 0 and i_epoch % reduce_learning_rate_n_epochs == 0:
             if verbose:
                 print("Decreasing learning rate")
-            learning_rate /= 2.0
+            learning_rate /= reduce_learning_rate_factor
 
         if verbose:
             print("Epoch %d"%i_epoch)
